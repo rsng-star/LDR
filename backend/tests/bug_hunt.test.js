@@ -41,7 +41,7 @@ async function runBugHunt() {
   }
   console.log(`Ditemukan ${definedIds.size} elemen HTML dengan ID unik.`);
 
-  // 1.2 Ekstrak semua document.getElementById('...') di dalam <script>
+  // 1.2 Ekstrak semua kode JavaScript frontend (inline script maupun assets/app.js)
   const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
   let fullJsContent = '';
   while ((match = scriptRegex.exec(htmlContent)) !== null) {
@@ -49,9 +49,13 @@ async function runBugHunt() {
       fullJsContent += match[1] + '\n';
     }
   }
+  const appJsPath = path.join(__dirname, '..', 'public', 'assets', 'app.js');
+  if (fs.existsSync(appJsPath)) {
+    fullJsContent += fs.readFileSync(appJsPath, 'utf8') + '\n';
+  }
 
   if (!fullJsContent) {
-    issuesFound.push('Tidak ditemukan tag <script> inline di index.html');
+    issuesFound.push('Tidak ditemukan kode JavaScript di index.html maupun assets/app.js');
   } else {
     const getElemRegex = /document\.getElementById\(['"]([a-zA-Z0-9_\-]+)['"]\)/g;
     const referencedIds = new Set();
@@ -73,16 +77,16 @@ async function runBugHunt() {
       console.log(`✅ SEMUA ID (${referencedIds.size} ID) yang dipanggil di JavaScript valid dan ada di DOM!`);
     }
 
-    // 1.3 Ekstrak semua onclick="..." di HTML dan cek apakah fungsinya ada di JS
-    const onclickRegex = /onclick=["']([a-zA-Z0-9_]+)\(/g;
+    // 1.3 Ekstrak semua data-action="..." dan onclick="..." di HTML dan cek apakah fungsinya ada di JS
+    const actionRegex = /(?:data-action=["']|onclick=["'])([a-zA-Z0-9_]+)/g;
     const calledFunctions = new Set();
-    while ((match = onclickRegex.exec(htmlContent)) !== null) {
+    while ((match = actionRegex.exec(htmlContent)) !== null) {
       calledFunctions.add(match[1]);
     }
 
     let missingFuncs = [];
     for (const funcName of calledFunctions) {
-      const funcDecl = new RegExp(`function\\s+${funcName}\\s*\\(`, 'g');
+      const funcDecl = new RegExp(`(?:function\\s+${funcName}\\s*\\(|${funcName}:\\s*(?:\\(|function))`, 'g');
       const varFuncDecl = new RegExp(`(?:const|let|var)\\s+${funcName}\\s*=\\s*(?:function|\\()`, 'g');
       if (!funcDecl.test(fullJsContent) && !varFuncDecl.test(fullJsContent)) {
         missingFuncs.push(funcName);
@@ -90,10 +94,10 @@ async function runBugHunt() {
     }
 
     if (missingFuncs.length > 0) {
-      issuesFound.push(`Fungsi onclick di HTML tapi TIDAK DITEMUKAN di JS: ${missingFuncs.join(', ')}`);
-      console.log(`❌ BUG DITEMUKAN: Fungsi onclick tidak ditemukan di script:`, missingFuncs);
+      issuesFound.push(`Fungsi action di HTML tapi TIDAK DITEMUKAN di JS: ${missingFuncs.join(', ')}`);
+      console.log(`❌ BUG DITEMUKAN: Fungsi action tidak ditemukan di script:`, missingFuncs);
     } else {
-      console.log(`✅ SEMUA fungsi onclick (${calledFunctions.size} fungsi) terdefinisi di JavaScript!`);
+      console.log(`✅ SEMUA aksi (${calledFunctions.size} aksi) terdefinisi di JavaScript!`);
     }
   }
 

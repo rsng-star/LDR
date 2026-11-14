@@ -8,6 +8,7 @@ const config = require('./config');
 const { cleanupOldData } = require('./db/database');
 const wsServerManager = require('./websocket/wsServer');
 const trackingService = require('./services/trackingService');
+const { MAP_TILE_DOMAINS } = require('../public/assets/mapStyles');
 
 // Inisialisasi rute
 const authRoutes = require('./routes/authRoutes');
@@ -26,16 +27,25 @@ wsServerManager.setTrackingService(trackingService);
 trackingService.setWebSocketServer(wsServerManager);
 wsServerManager.init(server);
 
-// P0-2 & P2-2: Helmet & Content Security Policy (CSP)
+// P0-2, K0-1, K0-2: Content Security Policy (CSP) & Proteksi Header Ketat
+const isProductionHttps = process.env.NODE_ENV === 'production' && (process.env.FORCE_HTTPS === 'true' || process.env.HTTPS === 'true');
+
 app.use(helmet({
   contentSecurityPolicy: {
+    useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
+      scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*.tile.openstreetmap.org", "https://unpkg.com"],
-      connectSrc: ["'self'", "ws:", "wss:", "https://ipwho.is"]
+      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", ...MAP_TILE_DOMAINS],
+      connectSrc: ["'self'", "ws:", "wss:", "https://ipwho.is"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      upgradeInsecureRequests: isProductionHttps ? [] : null
     }
   },
   crossOriginEmbedderPolicy: false
