@@ -1,13 +1,13 @@
 const WebSocket = require('ws');
-const url = require('url');
-const { getDeviceByToken, getDeviceById, updateDeviceStatus } = require('../db/database');
-const { verifyToken, getUserById } = require('../utils/security');
+const { getDeviceByToken, getDeviceById, getVerifiedPartner, updateDeviceStatus } = require('../db/database');
+const { validateCoordinates, validateAccuracy, validateSpeed, validateHeading, validateBattery } = require('../utils/validators');
 
 class WebSocketServerManager {
   constructor() {
     this.wss = null;
     this.clients = new Map(); // deviceId -> Set of ws connections
     this.trackingService = null;
+    this.heartbeatInterval = null;
   }
 
   setTrackingService(trackingService) {
@@ -15,42 +15,39 @@ class WebSocketServerManager {
   }
 
   init(server) {
-    this.wss = new WebSocket.Server({ server, path: '/ws' });
+    // P2-3: Batasi maxPayload menjadi 16 KB (default ws adalah 100 MiB)
+    this.wss = new WebSocket.Server({
+      server,
+      path: '/ws',
+      maxPayload: 16 * 1024
+    });
 
     this.wss.on('connection', (ws, req) => {
       this.handleConnection(ws, req);
     });
 
-    console.log('[WebSocket] Server diinisialisasi pada path /ws');
+    // P2-3: Heartbeat periodik 30 detik untuk membersihkan koneksi zombie
+    this.heartbeatInterval = setInterval(() => {
+      if (!this.wss) return;
+      for (const ws of this.wss.clients) {
+        if (ws.isAlive === false) {
+          console.log(`[WebSocket] Mematikan koneksi zombie (deviceId: ${ws.deviceId || 'unauthed'})`);
+          ws.terminate();
+          continue;
+        }
+        ws.isAlive = false;
+        ws.ping();
+      }
+    }, 30000);
+
+    console.log('[WebSocket] Server diinisialisasi pada path /ws dengan proteksi maxPayload 16KB & Heartbeat 30s');
   }
 
   handleConnection(ws, req) {
-    const parsedUrl = new URL(req.url, 'http://localhost');
-    const parameters = Object.fromEntries(parsedUrl.searchParams.entries());
-    let authenticatedDeviceId = null;
-
-    // Otentikasi saat koneksi pertama kali melalui token query
-    if (parameters.device_token) {
-      const dev = getDeviceByToken(parameters.device_token);
-      if (dev) {
-        authenticatedDeviceId = dev.id;
-      }
-    } else if (parameters.token) {
-      const decoded = verifyToken(parameters.token);
-      if (decoded && decoded.id) {
-        const { getDeviceByUserId } = require('../db/database');
-        const dev = getDeviceByUserId(decoded.id);
-        if (dev) {
-          authenticatedDeviceId = dev.id;
-        }
-      }
-    }
-
-    if (authenticatedDeviceId) {
-      this.registerClient(authenticatedDeviceId, ws);
-    }
-
     ws.isAlive = true;
+    ws.lastLocationUpdate = 0;
+    ws.lastPoke = 0;
+
     ws.on('pong', () => {
       ws.isAlive = true;
     });
@@ -87,7 +84,7 @@ class WebSocketServerManager {
     updateDeviceStatus(deviceId, true);
 
     const dev = getDeviceById(deviceId);
-    console.log(`[WebSocket] Perangkat #${deviceId} (${dev?.device_name || 'Device'}) terhubung.`);
+    console.log(`[WebSocket] Perangkat #${deviceId} (${dev?.device_name || 'Device'}) terautentikasi.`);
 
     ws.send(JSON.stringify({
       event: 'authenticated',
@@ -97,9 +94,10 @@ class WebSocketServerManager {
       }
     }));
 
-    // Beri tahu pasangan bahwa perangkat ini sedang online
-    if (dev && dev.partner_device_id) {
-      this.sendToDevice(dev.partner_device_id, {
+    // P0-4: Beri tahu pasangan timbal balik bahwa perangkat ini sedang online
+    const verifiedPartner = getVerifiedPartner(deviceId);
+    if (verifiedPartner) {
+      this.sendToDevice(verifiedPartner.id, {
         event: 'partner_status',
         data: {
           deviceId,
@@ -118,12 +116,9 @@ class WebSocketServerManager {
         this.clients.delete(deviceId);
         updateDeviceStatus(deviceId, false);
 
-        const dev = getDeviceById(deviceId);
-        console.log(`[WebSocket] Perangkat #${deviceId} terputus.`);
-
-        // Beri tahu pasangan bahwa perangkat ini offline
-        if (dev && dev.partner_device_id) {
-          this.sendToDevice(dev.partner_device_id, {
+        const verifiedPartner = getVerifiedPartner(deviceId);
+        if (verifiedPartner) {
+          this.sendToDevice(verifiedPartner.id, {
             event: 'partner_status',
             data: {
               deviceId,
@@ -139,8 +134,18 @@ class WebSocketServerManager {
   async handleMessage(ws, message) {
     const { event, data } = message;
 
-    // Otentikasi via pesan jika belum diautentikasi lewat URL
+    // Heartbeat ping-pong dapat dibalas langsung tanpa perlu otentikasi
+    if (event === 'ping') {
+      return ws.send(JSON.stringify({ event: 'pong', timestamp: Date.now() }));
+    }
+
+    // Otentikasi lewat pesan 'auth' pertama
     if (event === 'auth') {
+      // P2-3: Cegah satu socket mengirim 'auth' berulang untuk mendaftar ke banyak perangkat
+      if (ws.deviceId) {
+        return ws.send(JSON.stringify({ event: 'error', message: 'Socket sudah terotentikasi dan tidak dapat diubah' }));
+      }
+
       const { deviceToken } = data || {};
       const dev = getDeviceByToken(deviceToken);
       if (dev) {
@@ -152,54 +157,78 @@ class WebSocketServerManager {
     }
 
     if (!ws.deviceId) {
-      return ws.send(JSON.stringify({ event: 'error', message: 'Harap otentikasi terlebih dahulu' }));
+      return ws.send(JSON.stringify({ event: 'error', message: 'Harap otentikasi terlebih dahulu dengan event auth' }));
     }
 
+    const now = Date.now();
+
     switch (event) {
-      case 'ping':
-        ws.send(JSON.stringify({ event: 'pong', timestamp: Date.now() }));
-        break;
+      case 'location_update': {
+        // P2-3: Batasi laju pesan (location_update maksimal 1 per 2 detik per socket)
+        if (now - ws.lastLocationUpdate < 2000) {
+          return ws.send(JSON.stringify({ event: 'rate_limited', message: 'Terlalu cepat: maksimal 1 update lokasi per 2 detik' }));
+        }
+        ws.lastLocationUpdate = now;
 
-      case 'location_update':
-        if (this.trackingService) {
-          const res = await this.trackingService.processLocationUpdate(ws.deviceId, {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            accuracy: data.accuracy || 0,
-            speed: data.speed || 0,
-            heading: data.heading || 0,
-            battery: data.battery
-          });
+        if (this.trackingService && data) {
+          try {
+            const coords = validateCoordinates(data.latitude, data.longitude);
+            const res = await this.trackingService.processLocationUpdate(ws.deviceId, {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              accuracy: validateAccuracy(data.accuracy),
+              speed: validateSpeed(data.speed),
+              heading: validateHeading(data.heading),
+              battery: validateBattery(data.battery)
+            });
 
-          ws.send(JSON.stringify({
-            event: 'location_ack',
-            data: res
-          }));
+            ws.send(JSON.stringify({
+              event: 'location_ack',
+              data: res
+            }));
+          } catch (e) {
+            ws.send(JSON.stringify({ event: 'error', message: e.message }));
+          }
         }
         break;
+      }
 
-      case 'battery_update':
-        if (typeof data.battery === 'number') {
-          updateDeviceStatus(ws.deviceId, true, data.battery);
-          const dev = getDeviceById(ws.deviceId);
-          if (dev && dev.partner_device_id) {
-            this.sendToDevice(dev.partner_device_id, {
+      case 'battery_update': {
+        const cleanBattery = validateBattery(data?.battery);
+        if (cleanBattery !== null) {
+          updateDeviceStatus(ws.deviceId, true, cleanBattery);
+          const partner = getVerifiedPartner(ws.deviceId);
+          if (partner) {
+            this.sendToDevice(partner.id, {
               event: 'partner_battery',
               data: {
                 deviceId: ws.deviceId,
-                battery: data.battery
+                battery: cleanBattery
               }
             });
           }
         }
         break;
+      }
 
       case 'send_poke': {
-        const dev = getDeviceById(ws.deviceId);
-        if (dev && dev.partner_device_id) {
-          const pokeType = (data && data.type) ? data.type : 'heart';
-          const senderName = dev.device_name || 'Pasangan Anda';
-          this.sendToDevice(dev.partner_device_id, {
+        // P2-3: Batasi laju pesan (send_poke maksimal 1 per 5 detik per socket)
+        if (now - ws.lastPoke < 5000) {
+          return ws.send(JSON.stringify({ event: 'rate_limited', message: 'Harap tunggu 5 detik sebelum menyapa lagi' }));
+        }
+        ws.lastPoke = now;
+
+        const partner = getVerifiedPartner(ws.deviceId);
+        if (partner) {
+          // P2-3: Whitelist type pada poke
+          const allowedPokes = ['heart', 'wave', 'hug', 'alert'];
+          const rawType = (data && data.type) ? String(data.type).toLowerCase() : 'heart';
+          const pokeType = allowedPokes.includes(rawType) ? rawType : 'heart';
+
+          const dev = getDeviceById(ws.deviceId);
+          const senderName = dev ? dev.device_name : 'Pasangan Anda';
+
+          this.sendToDevice(partner.id, {
             event: 'partner_poke_received',
             data: {
               type: pokeType,
@@ -208,6 +237,7 @@ class WebSocketServerManager {
               timestamp: new Date().toISOString()
             }
           });
+
           ws.send(JSON.stringify({
             event: 'poke_sent_ack',
             data: { success: true, type: pokeType }
