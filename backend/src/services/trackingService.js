@@ -2,6 +2,7 @@ const {
   saveLocation,
   getLatestLocation,
   getDeviceById,
+  getVerifiedPartner,
   updateDeviceStatus,
   findMatchingPlace
 } = require('../db/database');
@@ -31,6 +32,7 @@ class TrackingService {
 
     // 1. Simpan lokasi baru ke database
     const savedLocation = saveLocation(deviceId, latitude, longitude, accuracy, speed, heading);
+    const nowIso = new Date().toISOString();
 
     // 2. Perbarui status baterai dan online status
     if (battery !== null) {
@@ -43,12 +45,13 @@ class TrackingService {
     let distanceToPartner = null;
     let distanceFormatted = null;
     let partnerLocation = null;
-    let alertInfo = null;
 
-    // 3. Jika perangkat memiliki pasangan terhubung, hitung jarak & kirim update ke pasangan
-    if (currentDevice && currentDevice.partner_device_id) {
-      const partnerDevice = getDeviceById(currentDevice.partner_device_id);
-      partnerLocation = getLatestLocation(currentDevice.partner_device_id);
+    // 3. P0-4: Verifikasi hubungan timbal-balik (mutual) sebelum membagikan lokasi
+    const partnerDevice = getVerifiedPartner(deviceId);
+    const isPaused = currentDevice ? Boolean(currentDevice.is_sharing_paused) : false;
+
+    if (partnerDevice && !isPaused) {
+      partnerLocation = getLatestLocation(partnerDevice.id);
 
       if (partnerLocation) {
         distanceToPartner = calculateHaversineDistance(
@@ -61,29 +64,31 @@ class TrackingService {
       }
 
       let matchedPlace = null;
-      if (partnerDevice && partnerDevice.user_id) {
+      if (partnerDevice.user_id) {
         matchedPlace = findMatchingPlace(partnerDevice.user_id, latitude, longitude);
       }
       if (!matchedPlace && currentDevice.user_id) {
         matchedPlace = findMatchingPlace(currentDevice.user_id, latitude, longitude);
       }
 
-      // Siapkan payload broadcast untuk pasangan
+      // P1-6: Pastikan timestamp & lastSeen menggunakan waktu penerimaan terbaru (bukan titik lama jika jitter filter aktif)
       const broadcastPayload = {
         deviceId: currentDevice.id,
         deviceName: currentDevice.device_name,
         battery: currentDevice.battery_level,
         isOnline: true,
+        isSharingPaused: false,
         location: savedLocation,
         distanceToPartner,
         distanceFormatted,
         matchedPlace,
-        timestamp: savedLocation.created_at
+        lastSeen: nowIso,
+        timestamp: nowIso
       };
 
       // 4. Broadcast via WebSocket ke pasangan
       if (this.wsServer) {
-        this.wsServer.sendToDevice(currentDevice.partner_device_id, {
+        this.wsServer.sendToDevice(partnerDevice.id, {
           event: 'partner_location_update',
           data: broadcastPayload
         });

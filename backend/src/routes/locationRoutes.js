@@ -4,6 +4,7 @@ const {
   getDeviceByUserId,
   getDeviceById,
   getDeviceByToken,
+  getVerifiedPartner,
   getLatestLocation,
   getLocationHistory,
   getNotifications,
@@ -12,41 +13,91 @@ const {
 } = require('../db/database');
 const { calculateHaversineDistance, formatDistance } = require('../utils/geo');
 const trackingService = require('../services/trackingService');
-const { verifyToken, getUserById } = require('../utils/security');
+const { verifyToken } = require('../utils/security');
+const {
+  validateCoordinates,
+  validateAccuracy,
+  validateSpeed,
+  validateHeading,
+  validateBattery,
+  validateLimit,
+  validateDateString
+} = require('../utils/validators');
+const config = require('../config');
 
-// Deteksi Lokasi Asli Pengguna Berdasarkan Jaringan / IP (Berfungsi di HTTP maupun HTTPS)
+// Cache in-memory untuk deteksi IP (TTL 1 jam)
+const ipLocationCache = new Map();
+
+// Helper untuk memeriksa apakah IP adalah private/loopback
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  const clean = ip.replace(/^::ffff:/, '');
+  return (
+    clean === '127.0.0.1' ||
+    clean === '::1' ||
+    clean === 'localhost' ||
+    clean.startsWith('10.') ||
+    clean.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(clean)
+  );
+}
+
+// P1-4: Deteksi Lokasi Asli Pengguna Berdasarkan IP Klien (dengan timeout, cache & trust proxy)
 router.get('/detect-ip-location', async (req, res) => {
+  const fallback = {
+    city: 'Yogyakarta',
+    region: 'Daerah Istimewa Yogyakarta',
+    country: 'Indonesia',
+    latitude: -7.8013885,
+    longitude: 110.3647176
+  };
+
   try {
-    const response = await fetch('https://ipwho.is/');
+    const rawIp = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+    const clientIp = rawIp ? rawIp.replace(/^::ffff:/, '').trim() : '';
+
+    if (!clientIp || isPrivateIp(clientIp)) {
+      return res.json(fallback);
+    }
+
+    // Cek cache
+    const cached = ipLocationCache.get(clientIp);
+    if (cached && cached.expiresAt > Date.now()) {
+      return res.json(cached.data);
+    }
+
+    // Fetch dengan timeout 3 detik
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`https://ipwho.is/${clientIp}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
     const data = await response.json();
     if (data && data.success) {
-      return res.json({
-        city: data.city,
-        region: data.region,
-        country: data.country,
-        latitude: data.latitude,
-        longitude: data.longitude
-      });
+      const result = {
+        city: data.city || fallback.city,
+        region: data.region || fallback.region,
+        country: data.country || fallback.country,
+        latitude: typeof data.latitude === 'number' ? data.latitude : fallback.latitude,
+        longitude: typeof data.longitude === 'number' ? data.longitude : fallback.longitude
+      };
+      ipLocationCache.set(clientIp, { data: result, expiresAt: Date.now() + 3600000 });
+      return res.json(result);
     }
-    res.json({
-      city: 'Yogyakarta',
-      region: 'Daerah Istimewa Yogyakarta',
-      latitude: -7.8013885,
-      longitude: 110.3647176
-    });
+
+    return res.json(fallback);
   } catch (e) {
-    res.json({
-      city: 'Yogyakarta',
-      latitude: -7.8013885,
-      longitude: 110.3647176
-    });
+    return res.json(fallback);
   }
 });
 
-// Helper middleware fleksibel: menerima token user (Bearer) ATAU token perangkat (X-Device-Token)
+// Helper middleware: menerima token user (Bearer) ATAU token perangkat (X-Device-Token Header SAJA)
 function resolveDevice(req, res, next) {
-  // 1. Coba dari token device langsung (misalnya background native GPS service)
-  const deviceToken = req.headers['x-device-token'] || req.body.device_token;
+  // 1. Coba dari X-Device-Token
+  const deviceToken = req.headers['x-device-token'];
   if (deviceToken) {
     const dev = getDeviceByToken(deviceToken);
     if (dev) {
@@ -60,7 +111,7 @@ function resolveDevice(req, res, next) {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
-    if (decoded) {
+    if (decoded && decoded.id) {
       const dev = getDeviceByUserId(decoded.id);
       if (dev) {
         req.device = dev;
@@ -69,7 +120,7 @@ function resolveDevice(req, res, next) {
     }
   }
 
-  return res.status(401).json({ error: 'Otorisasi gagal: Sertakan Bearer Token atau X-Device-Token' });
+  return res.status(401).json({ error: 'Otorisasi gagal: Sertakan Bearer Token atau Header X-Device-Token' });
 }
 
 // POST GPS Update (Setiap 10s - UC-02)
@@ -77,17 +128,20 @@ router.post('/update', resolveDevice, async (req, res) => {
   try {
     const { latitude, longitude, accuracy, speed, heading, battery } = req.body;
 
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return res.status(400).json({ error: 'Field latitude dan longitude (number) wajib diisi' });
-    }
+    // P2-1: Validasi ketat koordinat & telemetri
+    const coords = validateCoordinates(latitude, longitude);
+    const cleanAccuracy = validateAccuracy(accuracy);
+    const cleanSpeed = validateSpeed(speed);
+    const cleanHeading = validateHeading(heading);
+    const cleanBattery = validateBattery(battery);
 
     const result = await trackingService.processLocationUpdate(req.device.id, {
-      latitude,
-      longitude,
-      accuracy: accuracy || 0,
-      speed: speed || 0,
-      heading: heading || 0,
-      battery: typeof battery === 'number' ? battery : null
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: cleanAccuracy,
+      speed: cleanSpeed,
+      heading: cleanHeading,
+      battery: cleanBattery
     });
 
     res.status(200).json({
@@ -96,34 +150,35 @@ router.post('/update', resolveDevice, async (req, res) => {
     });
   } catch (err) {
     console.error('Location update error:', err);
-    res.status(500).json({ error: 'Gagal memperbarui lokasi' });
+    res.status(err.status || 500).json({ error: err.message || 'Gagal memperbarui lokasi' });
   }
 });
 
-// GET Latest Location Kedua Perangkat + Jarak
+// GET Latest Location Kedua Perangkat + Jarak (P0-4 Verifikasi Timbal Balik & P3-3 Privacy Check)
 router.get('/latest', resolveDevice, (req, res) => {
   try {
     const myDevice = req.device;
     const myLoc = getLatestLocation(myDevice.id);
 
-    let partnerDevice = null;
+    // P0-4: Pastikan hubungan timbal-balik (mutual)
+    const partnerDevice = getVerifiedPartner(myDevice.id);
     let partnerLoc = null;
     let distance = null;
     let distanceText = null;
 
-    if (myDevice.partner_device_id) {
-      partnerDevice = getDeviceById(myDevice.partner_device_id);
-      if (partnerDevice) {
-        partnerLoc = getLatestLocation(partnerDevice.id);
-        if (myLoc && partnerLoc) {
-          distance = calculateHaversineDistance(
-            myLoc.latitude,
-            myLoc.longitude,
-            partnerLoc.latitude,
-            partnerLoc.longitude
-          );
-          distanceText = formatDistance(distance);
-        }
+    // P3-3: Cek apakah pasangan sedang menjeda berbagi lokasi
+    const partnerSharingPaused = partnerDevice ? Boolean(partnerDevice.is_sharing_paused) : false;
+
+    if (partnerDevice && !partnerSharingPaused) {
+      partnerLoc = getLatestLocation(partnerDevice.id);
+      if (myLoc && partnerLoc) {
+        distance = calculateHaversineDistance(
+          myLoc.latitude,
+          myLoc.longitude,
+          partnerLoc.latitude,
+          partnerLoc.longitude
+        );
+        distanceText = formatDistance(distance);
       }
     }
 
@@ -132,7 +187,7 @@ router.get('/latest', resolveDevice, (req, res) => {
       : null;
 
     let partnerPlace = null;
-    if (partnerLoc) {
+    if (partnerLoc && !partnerSharingPaused) {
       if (myDevice.user_id) partnerPlace = findMatchingPlace(myDevice.user_id, partnerLoc.latitude, partnerLoc.longitude);
       if (!partnerPlace && partnerDevice && partnerDevice.user_id) {
         partnerPlace = findMatchingPlace(partnerDevice.user_id, partnerLoc.latitude, partnerLoc.longitude);
@@ -145,6 +200,7 @@ router.get('/latest', resolveDevice, (req, res) => {
         name: myDevice.device_name,
         battery: myDevice.battery_level,
         isOnline: Boolean(myDevice.is_online),
+        isSharingPaused: Boolean(myDevice.is_sharing_paused),
         lastSeen: myDevice.last_seen,
         location: myLoc,
         place: myPlace
@@ -154,9 +210,10 @@ router.get('/latest', resolveDevice, (req, res) => {
         name: partnerDevice.device_name,
         battery: partnerDevice.battery_level,
         isOnline: Boolean(partnerDevice.is_online),
+        isSharingPaused: partnerSharingPaused,
         lastSeen: partnerDevice.last_seen,
-        location: partnerLoc,
-        place: partnerPlace
+        location: partnerSharingPaused ? null : partnerLoc,
+        place: partnerSharingPaused ? null : partnerPlace
       } : null,
       distance,
       distanceFormatted: distanceText
@@ -167,20 +224,31 @@ router.get('/latest', resolveDevice, (req, res) => {
   }
 });
 
-// GET History Jalur Lokasi
+// GET History Jalur Lokasi (P0-4 Reciprocal Check & P2-1 Input Clamping)
 router.get('/history', resolveDevice, (req, res) => {
   try {
-    const limit = parseInt(req.query.limit || '100', 10);
-    const target = req.query.target === 'partner' && req.device.partner_device_id
-      ? req.device.partner_device_id
-      : req.device.id;
-    const date = req.query.date === 'today'
-      ? new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0]
-      : (req.query.date || null);
+    const limit = validateLimit(req.query.limit, 100, 500);
+    const isPartnerTarget = req.query.target === 'partner';
+    let targetDeviceId = req.device.id;
 
-    const history = getLocationHistory(target, limit, date);
+    if (isPartnerTarget) {
+      const verifiedPartner = getVerifiedPartner(req.device.id);
+      if (!verifiedPartner) {
+        return res.status(403).json({ error: 'Tidak memiliki akses riwayat: Hubungan pasangan tidak aktif atau tidak timbal-balik' });
+      }
+      if (verifiedPartner.is_sharing_paused) {
+        return res.status(403).json({ error: 'Pasangan sedang menjeda berbagi lokasi' });
+      }
+      targetDeviceId = verifiedPartner.id;
+    }
+
+    const dateQuery = req.query.date === 'today'
+      ? new Date(Date.now() + (config.TIMEZONE_OFFSET_HOURS || 7) * 3600 * 1000).toISOString().split('T')[0]
+      : validateDateString(req.query.date);
+
+    const history = getLocationHistory(targetDeviceId, limit, dateQuery);
     res.json({
-      deviceId: target,
+      deviceId: targetDeviceId,
       count: history.length,
       history
     });
@@ -190,18 +258,28 @@ router.get('/history', resolveDevice, (req, res) => {
   }
 });
 
-// GET Daily Journey Summary (Fitur 6: Ringkasan Perjalanan Hari Ini)
+// GET Daily Journey Summary (P1-1: Hitung Seluruh Titik Hari Itu)
 router.get('/daily-summary', resolveDevice, (req, res) => {
   try {
-    const target = req.query.target === 'partner' && req.device.partner_device_id
-      ? req.device.partner_device_id
-      : req.device.id;
-    const date = req.query.date || null;
-    const limit = parseInt(req.query.limit || '100', 10);
-    const summary = getDailyLocationSummary(target, date, limit);
+    const isPartnerTarget = req.query.target === 'partner';
+    let targetDeviceId = req.device.id;
+
+    if (isPartnerTarget) {
+      const verifiedPartner = getVerifiedPartner(req.device.id);
+      if (!verifiedPartner) {
+        return res.status(403).json({ error: 'Tidak memiliki akses ringkasan: Hubungan pasangan tidak aktif atau tidak timbal-balik' });
+      }
+      if (verifiedPartner.is_sharing_paused) {
+        return res.status(403).json({ error: 'Pasangan sedang menjeda berbagi lokasi' });
+      }
+      targetDeviceId = verifiedPartner.id;
+    }
+
+    const dateQuery = validateDateString(req.query.date);
+    const summary = getDailyLocationSummary(targetDeviceId, dateQuery);
     res.json({
-      deviceId: target,
-      date: date || new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0],
+      deviceId: targetDeviceId,
+      date: dateQuery || new Date(Date.now() + (config.TIMEZONE_OFFSET_HOURS || 7) * 3600 * 1000).toISOString().split('T')[0],
       summary
     });
   } catch (err) {
@@ -210,10 +288,10 @@ router.get('/daily-summary', resolveDevice, (req, res) => {
   }
 });
 
-// GET Daftar Notifikasi & Peringatan Jarak
+// GET Daftar Notifikasi
 router.get('/notifications', resolveDevice, (req, res) => {
   try {
-    const limit = parseInt(req.query.limit || '20', 10);
+    const limit = validateLimit(req.query.limit, 20, 100);
     const notifications = getNotifications(req.device.id, limit);
     res.json({
       notifications

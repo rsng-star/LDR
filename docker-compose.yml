@@ -11,9 +11,12 @@ services:
     environment:
       - PORT=3000
       - HOST=0.0.0.0
-      - JWT_SECRET=tanpilan_production_secret_key_2026
+      - DATABASE_PATH=/app/data/tanpilan.db
+      - JWT_SECRET=${JWT_SECRET:-dev_insecure_random_rotation_key_for_docker}
       - GPS_INTERVAL_SECONDS=10
       - DISTANCE_ALERT_THRESHOLD_METERS=100
+      - TIMEZONE_OFFSET_HOURS=7
+      - MAX_HISTORY_DAYS=30
     volumes:
       - ./data:/app/data
     restart: unless-stopped
