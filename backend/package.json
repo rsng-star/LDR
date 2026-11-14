@@ -1,0 +1,21 @@
+{
+  "name": "aplikasi-tanpilan-backend",
+  "version": "1.0.0",
+  "description": "Backend API & WebSocket server for Tanpilan Two-Device Real-time GPS Tracker",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "test": "node tests/backend.test.js && node tests/features.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "localtunnel": "^2.0.2",
+    "ws": "^8.18.0"
+  }
+}

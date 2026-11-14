@@ -1,0 +1,16 @@
+{
+  "name": "Tanpilan Tracking",
+  "short_name": "Tanpilan",
+  "description": "Pelacakan Dua Device Realtime Tanpa Batas Jarak",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090D16",
+  "theme_color": "#090D16",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

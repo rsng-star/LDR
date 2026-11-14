@@ -1,0 +1,3761 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tanpilan - Pelacakan Pasangan Realtime</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#F8F6F1">
+
+  <!-- Typography: Google Fonts (Fraunces + DM Sans + IBM Plex Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=Fraunces:ital,opsz,wght@0,9..144,500..800;1,9..144,500..800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- QRCode.js for 1-Tap Mobile Pairing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Tanpilan Vector Asset Icon System -->
+  <script src="/assets/icons.js"></script>
+
+  <style>
+    /* Vector Asset Icon Component */
+    app-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    app-icon svg {
+      vertical-align: middle;
+      display: inline-block;
+    }
+
+    /* ========================================================
+       DESIGN TOKENS (WARM FOLDED MAP & INK SYSTEM)
+       ======================================================== */
+        :root {
+      /* --- PALET KERTAS & TINTA (Light / Default) --- */
+      --paper-bg: #F8F6F1;
+      --paper-surface: #FFFFFF;
+      --paper-subtle: #F1EDE4;
+      --paper-subtle-hover: #E7E2D6;
+      --paper-border: #E5DFD3;
+      --paper-border-strong: #CEC6B6;
+      
+      --ink-primary: #1F1D1A;
+      --ink-secondary: #58534B;
+      --ink-muted: #726C62;             /* WCAG AA >= 4.8:1 on #F8F6F1 & >= 5.2:1 on #FFFFFF */
+      --ink-on-accent: #FFFFFF;
+
+      /* --- SATU WARNA AKSEN: TERAKOTA KORAL (Pasangan) --- */
+      --accent-terracotta: #BF5129;        /* WCAG AA >= 4.75:1 with white text */
+      --accent-terracotta-hover: #A8441F;
+      --accent-terracotta-subtle: #FDF3EE;
+      --accent-terracotta-border: #E8BCAE;
+
+      /* --- BRAND WHATSAPP (WCAG AA) --- */
+      --brand-whatsapp: #0F7A47;           /* WCAG AA >= 5.39:1 with white text */
+      --brand-whatsapp-hover: #0C653A;
+
+      /* --- STATUS SEMANTIK MINIMAL (Bukan Dekorasi) --- */
+      --status-live: #2E7D52;
+      --status-live-bg: #EDF7F1;
+      --status-live-border: #B7DDC4;
+      --status-standby: #96621E;
+      --status-standby-bg: #FDF6EB;
+      --status-standby-border: #ECCCA0;
+      --status-offline: #78716C;
+      --status-offline-bg: #F5F4F1;
+      --status-offline-border: #D7D4CE;
+      --status-danger: #B9382E;
+      --status-danger-bg: #FDF2F0;
+      --status-danger-border: #E8B2AE;
+
+      /* --- TIPOGRAFI HIERARKIS & SKALA --- */
+      --font-serif: 'Fraunces', Georgia, serif;
+      --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+      --text-2xs: 0.625rem;   /* 10px */
+      --text-xs: 0.6875rem;    /* 11px */
+      --text-sm: 0.8125rem;    /* 13px */
+      --text-md: 0.875rem;     /* 14px */
+      --text-base: 0.9375rem;  /* 15px */
+      --text-lg: 1.125rem;     /* 18px */
+      --text-xl: 1.25rem;      /* 20px */
+      --text-2xl: 1.625rem;    /* 26px */
+      --text-3xl: 2.125rem;    /* 34px */
+
+      /* --- SPACING SCALE (Kelipatan 4 / 8) --- */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+
+      /* --- RADIUS BERATURAN --- */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-full: 9999px;
+
+      /* --- ELEVASI KERTAS TAKTIK --- */
+      --shadow-sm: 0 1px 3px rgba(31, 29, 26, 0.05), 0 1px 2px rgba(31, 29, 26, 0.03);
+      --shadow-md: 0 4px 14px -2px rgba(31, 29, 26, 0.08), 0 2px 6px -1px rgba(31, 29, 26, 0.04);
+      --shadow-lg: 0 12px 28px -4px rgba(31, 29, 26, 0.12), 0 4px 10px -2px rgba(31, 29, 26, 0.06);
+      --shadow-sheet: 0 -4px 20px rgba(31, 29, 26, 0.08);
+
+      /* --- TARGET SENTUH MINIMAL & SAFE AREA --- */
+      --touch-target: 44px;
+      --safe-top: env(safe-area-inset-top, 16px);
+      --safe-bottom: env(safe-area-inset-bottom, 16px);
+    }
+
+    /* Dark Mode (Prefers-color-scheme) - Same token structure, warm charcoal parchment */
+        @media (prefers-color-scheme: dark) {
+      :root {
+        --paper-bg: #161513;
+        --paper-surface: #201E1B;
+        --paper-subtle: #292622;
+        --paper-subtle-hover: #332F2A;
+        --paper-border: #3A3630;
+        --paper-border-strong: #4F4940;
+        
+        --ink-primary: #F4F1EB;
+        --ink-secondary: #BDB6AA;
+        --ink-muted: #A49D92;         /* WCAG AA >= 6.19:1 on #201E1B & >= 6.79:1 on #161513 */
+        --ink-on-accent: #FFFFFF;
+
+        --accent-terracotta: #D86B42;
+        --accent-terracotta-hover: #E47950;
+        --accent-terracotta-subtle: #38231B;
+        --accent-terracotta-border: #5A3526;
+
+        --brand-whatsapp: #138D52;
+        --brand-whatsapp-hover: #16A35E;
+
+        --status-live: #4CAE78;
+        --status-live-bg: #1A2B20;
+        --status-live-border: #2B4C36;
+        --status-standby: #D28F3D;
+        --status-standby-bg: #2C2214;
+        --status-standby-border: #4D3A1F;
+        --status-offline: #9C968E;
+        --status-offline-bg: #252321;
+        --status-offline-border: #3B3835;
+        --status-danger: #D9534F;
+        --status-danger-bg: #321B19;
+        --status-danger-border: #5A2926;
+
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+        --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+
+    /* Connection Reconnecting Banner */
+    .connection-status-banner {
+      position: absolute;
+      top: calc(var(--safe-top) + 52px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--status-standby-bg);
+      color: var(--status-standby);
+      border: 1px solid var(--status-standby-border);
+      border-radius: var(--radius-full);
+      padding: 4px 14px;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      z-index: 460;
+      box-shadow: var(--shadow-sm);
+      animation: bannerSlideDown 0.25s ease-out;
+    }
+    @keyframes bannerSlideDown {
+      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* Distance Card Connection States */
+    .distance-floating-hud.state-connecting .dist-number {
+      font-size: var(--text-sm);
+      font-family: var(--font-sans);
+      font-weight: 600;
+      color: var(--ink-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-1) 0;
+    }
+    .distance-floating-hud.state-unpaired .dist-number {
+      font-size: var(--text-base);
+      font-family: var(--font-sans);
+      font-weight: 700;
+      color: var(--accent-terracotta);
+    }
+    .distance-floating-hud.state-offline .dist-number {
+      opacity: 0.65;
+      color: var(--ink-secondary);
+    }
+    .dist-connecting-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--paper-border-strong);
+      border-top-color: var(--accent-terracotta);
+      border-radius: 50%;
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+    }
+    .empty-state-text {
+      color: var(--ink-muted);
+      font-style: italic;
+      font-weight: 400;
+      font-size: var(--text-xs);
+    }
+
+    /* Ticker Semantic Dot */
+    .ticker-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: var(--radius-full);
+      margin-right: var(--space-1);
+      vertical-align: middle;
+    }
+    .ticker-dot.live {
+      background: var(--status-live);
+    }
+    .ticker-dot.standby {
+      background: var(--status-standby);
+    }
+    .ticker-dot.offline {
+      background: var(--status-offline);
+    }
+
+    /* Telemetry Card Status Badges */
+    .telemetry-status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      font-weight: 600;
+    }
+    .telemetry-status.is-live {
+      color: var(--status-live);
+    }
+    .telemetry-status.is-standby {
+      color: var(--status-standby);
+    }
+    .telemetry-status.is-offline {
+      color: var(--status-offline);
+    }
+
+    /* History & Places Item Classes */
+    .history-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--paper-border);
+      font-size: var(--text-xs);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .history-item-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .history-idx {
+      color: var(--accent-terracotta);
+      font-weight: 700;
+    }
+    .history-time {
+      color: var(--ink-primary);
+    }
+    .history-coords {
+      color: var(--ink-muted);
+    }
+    .history-speed {
+      font-weight: 600;
+    }
+    .history-speed.is-live {
+      color: var(--status-live);
+    }
+    .history-speed.is-offline {
+      color: var(--ink-muted);
+    }
+
+    .saved-place-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--paper-border);
+      font-size: var(--text-sm);
+    }
+    .saved-place-name {
+      font-weight: 700;
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .saved-place-meta {
+      font-size: var(--text-2xs);
+      color: var(--ink-muted);
+      margin-top: 2px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .btn-delete-place {
+      background: transparent;
+      border: none;
+      color: var(--status-danger);
+      padding: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      min-width: 32px;
+      min-height: 32px;
+      transition: background-color 0.15s ease;
+    }
+    .btn-delete-place:hover {
+      background: var(--status-danger-bg);
+    }
+
+    .trail-marker-dot.start {
+      background: var(--status-live);
+      width: 12px;
+      height: 12px;
+      border-radius: var(--radius-full);
+      border: 2px solid var(--paper-surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .trail-marker-dot.end {
+      background: var(--accent-terracotta);
+      width: 14px;
+      height: 14px;
+      border-radius: var(--radius-full);
+      border: 2px solid var(--paper-surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .substatus-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+    .substatus-pill.status-live {
+      color: var(--status-live);
+    }
+    .substatus-pill.status-standby {
+      color: var(--status-standby);
+    }
+
+    .pill-badge.status-live {
+      color: var(--status-live);
+      border-color: var(--status-live-border);
+      background: var(--status-live-bg);
+    }
+    .pill-badge.status-standby {
+      color: var(--status-standby);
+      border-color: var(--status-standby-border);
+      background: var(--status-standby-bg);
+    }
+
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      font-family: var(--font-sans);
+      background: var(--paper-bg);
+      color: var(--ink-primary);
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      overscroll-behavior: none;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Accessible Focus Rings */
+    button:focus-visible,
+    input:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid var(--accent-terracotta);
+      outline-offset: 2px;
+    }
+
+    /* Custom Theme Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--paper-border-strong);
+      border-radius: var(--radius-full);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--ink-muted);
+    }
+
+    /* Fullscreen Leaflet Map */
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      background: var(--paper-bg);
+    }
+
+    /* Natural warm parchment tone for map tiles */
+    .leaflet-tile-pane {
+      filter: saturate(0.88) contrast(1.02);
+    }
+
+    .dark-tiles .leaflet-tile {
+      filter: brightness(0.68) contrast(1.12) sepia(0.2) grayscale(0.2);
+    }
+
+    /* Header HUD */
+    .header-hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: calc(var(--safe-top) + var(--space-2)) var(--space-4) var(--space-3) var(--space-4);
+      z-index: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .brand-pill {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--paper-surface);
+      padding: 7px 14px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--paper-border);
+      box-shadow: var(--shadow-md);
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-live);
+    }
+
+    .brand-text {
+      font-family: var(--font-serif);
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--ink-primary);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+
+    #hudSubStatus {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+      font-variant-numeric: tabular-nums;
+      margin-top: 1px;
+    }
+
+    .header-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
+      width: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: 50%;
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--paper-subtle);
+      border-color: var(--paper-border-strong);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.94);
+    }
+
+    /* PWA Banner */
+    .pwa-banner {
+      position: absolute;
+      top: calc(var(--safe-top) + 60px);
+      left: 16px;
+      right: 16px;
+      max-width: 380px;
+      margin: 0 auto;
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border-strong);
+      border-radius: var(--radius-lg);
+      padding: 10px 14px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      z-index: 480;
+      box-shadow: var(--shadow-md);
+    }
+
+    .pwa-banner.active {
+      display: flex;
+    }
+
+    .pwa-banner-text {
+      flex: 1;
+      font-size: var(--text-sm);
+      line-height: 1.3;
+      color: var(--ink-secondary);
+    }
+
+    .pwa-banner-text strong {
+      display: block;
+      color: var(--ink-primary);
+      font-weight: 700;
+    }
+
+    .btn-pwa-install {
+      background: var(--ink-primary);
+      color: var(--paper-surface);
+      border: none;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      min-height: 32px;
+    }
+
+    .btn-pwa-install:hover {
+      background: var(--ink-secondary);
+    }
+
+    .btn-pwa-close {
+      background: transparent;
+      border: none;
+      color: var(--ink-muted);
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      min-height: 32px;
+      border-radius: var(--radius-sm);
+    }
+
+    .btn-pwa-close:hover {
+      color: var(--ink-primary);
+    }
+
+    /* Floating Distance HUD (Primary Dominant Element of Main Screen) */
+    .distance-floating-hud {
+      position: absolute;
+      top: calc(var(--safe-top) + 64px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border-strong);
+      border-radius: var(--radius-lg);
+      padding: 10px 22px;
+      z-index: 450;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+      min-width: 195px;
+      max-width: 280px;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .distance-floating-hud:hover {
+      border-color: var(--accent-terracotta);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .distance-floating-hud:active {
+      transform: translateX(-50%) scale(0.97);
+    }
+
+    .dist-tag {
+      font-family: var(--font-sans);
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .dist-number {
+      font-family: var(--font-serif);
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+      margin: 3px 0;
+      line-height: 1.15;
+    }
+
+    .floating-compass-pill {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--ink-secondary);
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    /* Map Tools Rail (Clean Grouping with Labels/Tooltips) */
+    .map-tools-rail {
+      position: absolute;
+      right: 14px;
+      bottom: calc(var(--safe-bottom) + 160px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      z-index: 400;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    }
+
+    .map-tools-rail.sheet-expanded {
+      opacity: 0.15;
+      transform: translateY(-16px) scale(0.94);
+      pointer-events: none;
+    }
+
+    .map-utility-group,
+    .camera-control-capsule {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tool-fab {
+      width: var(--touch-target);
+      height: var(--touch-target);
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
+      border-radius: var(--radius-lg);
+      background: transparent;
+      border: none;
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+    }
+
+    .tool-fab:hover {
+      background: var(--paper-subtle);
+    }
+
+    .tool-fab:active {
+      transform: scale(0.92);
+    }
+
+    .camera-control-capsule {
+      border-radius: var(--radius-full);
+      padding: 2px 0;
+    }
+
+    .capsule-segment {
+      width: var(--touch-target);
+      height: var(--touch-target);
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--ink-primary);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s ease, transform 0.12s ease;
+    }
+
+    .capsule-segment:hover {
+      background: var(--paper-subtle);
+    }
+
+    .capsule-segment:active {
+      transform: scale(0.92);
+    }
+
+    .capsule-segment.partner-segment:hover {
+      color: var(--accent-terracotta);
+    }
+
+    .capsule-divider {
+      width: 22px;
+      height: 1px;
+      background: var(--paper-border);
+      margin: 0 auto;
+    }
+
+    .partner-pulse-dot {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-terracotta);
+    }
+
+    /* Tooltip Pills for Map Controls */
+    .tool-fab[data-label]::before,
+    .capsule-segment[data-label]::before {
+      content: attr(data-label);
+      position: absolute;
+      right: calc(100% + 8px);
+      top: 50%;
+      transform: translateY(-50%) translateX(4px);
+      background: var(--ink-primary);
+      color: #FFFFFF;
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      box-shadow: var(--shadow-sm);
+      z-index: 100;
+    }
+
+    .tool-fab:hover::before,
+    .tool-fab:focus-visible::before,
+    .capsule-segment:hover::before,
+    .capsule-segment:focus-visible::before {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    /* Bottom Sheet: Partner Telemetry & Detailed Dashboard */
+    .bottom-partner-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--paper-surface);
+      border-top: 1px solid var(--paper-border-strong);
+      border-top-left-radius: var(--radius-xl);
+      border-top-right-radius: var(--radius-xl);
+      padding: 8px 16px calc(var(--safe-bottom) + 12px) 16px;
+      z-index: 500;
+      box-shadow: var(--shadow-sheet);
+      transition: max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 155px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Strict Mobile-First Rule: NEVER cover more than half the map */
+    .bottom-partner-sheet.expanded {
+      max-height: min(48vh, 380px);
+      overflow-y: auto;
+    }
+
+    .sheet-handle-bar {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--paper-border-strong);
+      margin: 4px auto 10px auto;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .sheet-handle-bar:hover {
+      background: var(--ink-muted);
+    }
+
+    .partner-info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    .partner-user-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .partner-avatar-wrap {
+      position: relative;
+    }
+
+    .avatar-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--paper-subtle);
+      border: 2px solid var(--accent-terracotta);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-terracotta);
+    }
+
+    .online-indicator-badge {
+      position: absolute;
+      bottom: 0px;
+      right: 0px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--status-live);
+      border: 2px solid var(--paper-surface);
+    }
+
+    .partner-title-text {
+      font-family: var(--font-serif);
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.2;
+    }
+
+    .proximity-badge {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--status-live);
+    }
+
+    .partner-status-pill {
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--paper-subtle);
+      color: var(--ink-secondary);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--paper-border);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      height: 22px;
+      line-height: 1;
+    }
+
+    .place-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--status-live-bg);
+      border: 1px solid var(--status-live-border);
+      color: var(--status-live);
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+
+    .pair-mini-btn {
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      width: auto;
+      padding: 0 12px;
+      height: 36px;
+      min-height: 36px;
+      gap: 5px;
+      border: 1px solid var(--paper-border-strong);
+    }
+
+    .partner-address-box {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .address-text {
+      font-size: var(--text-xs);
+      color: var(--ink-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .time-ticker {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Expanded Details Grid */
+    .telemetry-expand-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .bottom-partner-sheet.expanded .telemetry-expand-grid {
+      opacity: 1;
+    }
+
+    .telemetry-card {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .telemetry-card:hover {
+      border-color: var(--paper-border-strong);
+    }
+
+    .telemetry-label {
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 3px;
+    }
+
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .highlight-green {
+      color: var(--status-live);
+    }
+
+    /* Action Buttons Row: Strictly Hierarchical */
+    .sheet-btn-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .btn-action-sheet {
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+      padding: 0 14px;
+      white-space: nowrap;
+    }
+
+    .btn-action-sheet:active {
+      transform: scale(0.96);
+    }
+
+    /* 1. Primary Dominant Action: Rute */
+    .sheet-btn-row .btn-nav {
+      flex: 1.4;
+      background: var(--accent-terracotta);
+      color: #FFFFFF;
+      border: 1px solid var(--accent-terracotta);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .sheet-btn-row .btn-nav:hover {
+      background: var(--accent-terracotta-hover);
+      border-color: var(--accent-terracotta-hover);
+    }
+
+    /* 2. Secondary Tonal Action: Sapa Pasangan */
+    .sheet-btn-row .btn-poke {
+      flex: 1;
+      background: var(--accent-terracotta-subtle);
+      color: var(--accent-terracotta);
+      border: 1px solid var(--accent-terracotta-border);
+    }
+
+    .sheet-btn-row .btn-poke:hover {
+      background: #FCE8DE;
+    }
+
+    /* 3. Tertiary Ghost Action: Bagikan WA */
+    .sheet-btn-row .btn-share {
+      flex: 0.9;
+      background: var(--paper-surface);
+      color: var(--ink-primary);
+      border: 1px solid var(--paper-border-strong);
+    }
+
+    .sheet-btn-row .btn-share:hover {
+      background: var(--paper-subtle);
+    }
+
+    /* Radar Beacon Markers */
+    .radar-beacon {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform;
+    }
+
+    .beacon-core-me {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--ink-primary);
+      border: 2.5px solid #FFFFFF;
+      box-shadow: var(--shadow-sm);
+      z-index: 2;
+    }
+
+    .beacon-ripple-me {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(31, 29, 26, 0.12);
+      animation: beacon-wave 2.2s infinite ease-out;
+      z-index: 1;
+    }
+
+    .beacon-core-partner {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-terracotta);
+      border: 2.5px solid #FFFFFF;
+      box-shadow: var(--shadow-sm);
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+    }
+
+    .beacon-ripple-partner {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(200, 90, 50, 0.22);
+      animation: beacon-wave 2.2s infinite ease-out;
+      z-index: 1;
+    }
+
+    @keyframes beacon-wave {
+      0% { transform: scale(0.4); opacity: 1; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+
+    .leaflet-interactive.acc-circle {
+      stroke: var(--ink-secondary) !important;
+      stroke-width: 1px !important;
+      stroke-dasharray: 4, 4;
+      fill: var(--ink-muted) !important;
+      fill-opacity: 0.08 !important;
+    }
+
+    /* Modals System (Warm Paper Dialog) */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(31, 29, 26, 0.45);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+      animation: modal-fade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modal-fade {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-card {
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border-strong);
+      border-radius: var(--radius-xl);
+      padding: 22px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      max-height: 88vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-family: var(--font-serif);
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--ink-primary);
+      letter-spacing: -0.01em;
+    }
+
+    .btn-close-modal {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 50%;
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      color: var(--ink-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-close-modal:hover {
+      background: var(--paper-subtle-hover);
+      color: var(--ink-primary);
+    }
+
+    .btn-close-modal:active {
+      transform: scale(0.92);
+    }
+
+    .modal-description {
+      font-size: var(--text-sm);
+      color: var(--ink-secondary);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    /* Standardized Buttons */
+    .btn-submit-action {
+      width: 100%;
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: var(--radius-md);
+      background: var(--accent-terracotta);
+      color: #FFFFFF;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: var(--text-sm);
+      border: 1px solid var(--accent-terracotta);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn-submit-action:hover {
+      background: var(--accent-terracotta-hover);
+      border-color: var(--accent-terracotta-hover);
+    }
+
+    .btn-submit-action:active {
+      transform: scale(0.97);
+    }
+
+    .btn-secondary-action {
+      width: 100%;
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: var(--radius-md);
+      background: var(--paper-subtle);
+      color: var(--ink-primary);
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: var(--text-sm);
+      border: 1px solid var(--paper-border-strong);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn-secondary-action:hover {
+      background: var(--paper-subtle-hover);
+    }
+
+    .btn-secondary-action:active {
+      transform: scale(0.97);
+    }
+
+    .btn-danger-action {
+      width: 100%;
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: var(--radius-md);
+      background: var(--status-danger-bg);
+      color: var(--status-danger);
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: var(--text-sm);
+      border: 1px solid var(--status-danger-border);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn-danger-action:hover {
+      background: #FCE6E5;
+    }
+
+    .btn-danger-action:active {
+      transform: scale(0.97);
+    }
+
+    .btn-whatsapp-action {
+      width: 100%;
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      border-radius: var(--radius-md);
+      background: var(--brand-whatsapp);
+      color: #FFFFFF;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: var(--text-sm);
+      border: 1px solid var(--brand-whatsapp);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-whatsapp-action:hover {
+      background: var(--brand-whatsapp-hover);
+      border-color: var(--brand-whatsapp-hover);
+    }
+
+    .btn-whatsapp-action:active {
+      transform: scale(0.97);
+    }
+
+    /* Standard Input */
+    .input-text-standard {
+      width: 100%;
+      min-height: var(--touch-target);
+      height: var(--touch-target);
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border-strong);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      color: var(--ink-primary);
+      font-size: var(--text-sm);
+      margin-bottom: 14px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .input-text-standard:focus {
+      border-color: var(--accent-terracotta);
+      background: var(--paper-surface);
+    }
+
+    /* Onboarding Selection */
+    .role-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .role-card-select {
+      background: var(--paper-subtle);
+      border: 1.5px solid var(--paper-border);
+      border-radius: var(--radius-lg);
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .role-card-select.active {
+      border-color: var(--accent-terracotta);
+      background: var(--accent-terracotta-subtle);
+    }
+
+    .role-icon-box {
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: center;
+      color: var(--accent-terracotta);
+    }
+
+    .role-title {
+      color: var(--ink-primary);
+      font-size: var(--text-md);
+      display: block;
+    }
+
+    .role-subtitle {
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+      margin-top: 2px;
+      display: block;
+    }
+
+    /* Pairing Screen: Hero Code */
+    .pairing-container-card,
+    .pairing-entry-card {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .pairing-section-label {
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .pairing-pin-display {
+      background: var(--paper-surface);
+      border: 1.5px dashed var(--accent-terracotta);
+      border-radius: var(--radius-md);
+      padding: 16px 12px;
+      text-align: center;
+      margin: 6px 0 14px 0;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .pairing-pin-display:hover {
+      background: var(--accent-terracotta-subtle);
+    }
+
+    .pin-code-text {
+      font-family: var(--font-mono);
+      font-size: var(--text-3xl);
+      font-weight: 700;
+      letter-spacing: 8px;
+      color: var(--accent-terracotta);
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 4px;
+    }
+
+    .pin-code-hint {
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .qr-container-box {
+      background: #FFFFFF;
+      padding: 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--paper-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 12px auto;
+      width: 154px;
+      height: 154px;
+    }
+
+    input.input-pin-entry {
+      width: 100%;
+      min-height: 48px;
+      height: 48px;
+      background: var(--paper-surface);
+      border: 1px solid var(--paper-border-strong);
+      border-radius: var(--radius-md);
+      padding: 8px 16px;
+      color: var(--ink-primary);
+      font-family: var(--font-mono);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 6px;
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    input.input-pin-entry:focus {
+      border-color: var(--accent-terracotta);
+    }
+
+    /* Settings Screen (Human Grouping) */
+    .settings-group {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+
+    .settings-group-title {
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      margin-bottom: 10px;
+    }
+
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      font-size: var(--text-sm);
+      border-bottom: 1px solid var(--paper-border);
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+      padding-bottom: 2px;
+    }
+
+    .settings-label {
+      color: var(--ink-secondary);
+    }
+
+    .settings-value {
+      font-weight: 600;
+      color: var(--ink-primary);
+    }
+
+    .settings-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs);
+      font-weight: 700;
+    }
+
+    .settings-tag.status-live {
+      background: var(--status-live-bg);
+      color: var(--status-live);
+      border: 1px solid var(--status-live-border);
+    }
+
+    .settings-technical-details {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: var(--text-sm);
+    }
+
+    .technical-summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--ink-secondary);
+      user-select: none;
+    }
+
+    .technical-content {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--paper-border);
+    }
+
+    .settings-row-subtle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+    }
+
+    .code-mono {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .settings-actions {
+      margin-top: 14px;
+    }
+
+    /* History Screen */
+    .history-modal-card {
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .segmented-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--paper-subtle);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--paper-border);
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .segmented-tab-btn {
+      flex: 1;
+      height: 38px;
+      min-height: 38px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .segmented-tab-btn.is-active {
+      background: var(--paper-surface);
+      color: var(--ink-primary);
+      font-weight: 700;
+      border-color: var(--paper-border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .daily-summary-card {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border-strong);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .summary-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .summary-badge-title {
+      font-size: var(--text-xs);
+      font-weight: 800;
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .summary-date-text {
+      font-size: var(--text-xs);
+      color: var(--ink-muted);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      text-align: center;
+    }
+
+    .summary-stat-box {
+      background: var(--paper-surface);
+      padding: 8px 4px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--paper-border);
+    }
+
+    .summary-stat-label {
+      font-size: var(--text-2xs);
+      color: var(--ink-muted);
+      margin-bottom: 2px;
+    }
+
+    .summary-stat-val {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-actions-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .history-render-btn {
+      flex: 1;
+      height: 40px;
+      min-height: 40px;
+      font-size: var(--text-sm);
+    }
+
+    .history-clear-btn {
+      width: 44px;
+      height: 40px;
+      min-height: 40px;
+      padding: 0;
+      color: var(--status-danger);
+    }
+
+    .history-list-header {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .point-count-text {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-scroll-box {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--paper-subtle);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--paper-border);
+      padding: 8px;
+      max-height: 220px;
+    }
+
+    #historyPointsList > div {
+      border-bottom: 1px solid var(--paper-border);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #historyPointsList > div span {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-empty-message,
+    .places-empty-message {
+      text-align: center;
+      padding: 20px;
+      color: var(--ink-muted);
+      font-size: var(--text-sm);
+    }
+
+    /* Navigation Modal */
+    .nav-app-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .nav-google-btn {
+      background: var(--ink-primary);
+      border-color: var(--ink-primary);
+    }
+
+    .nav-google-btn:hover {
+      background: var(--ink-secondary);
+      border-color: var(--ink-secondary);
+    }
+
+    /* Places Modal */
+    .places-modal-card {
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .new-place-box {
+      background: var(--paper-subtle);
+      border: 1px solid var(--paper-border);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .place-box-title {
+      font-size: var(--text-xs);
+      font-weight: 800;
+      color: var(--accent-terracotta);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+
+    .place-source-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .btn-source-toggle {
+      flex: 1;
+      height: 38px;
+      min-height: 38px;
+      font-size: var(--text-xs);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid var(--paper-border);
+      background: var(--paper-surface);
+      color: var(--ink-secondary);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-source-toggle.is-active {
+      border-color: var(--accent-terracotta);
+      background: var(--accent-terracotta-subtle);
+      color: var(--accent-terracotta);
+      font-weight: 700;
+    }
+
+    .places-list-header {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .places-scroll-box {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--paper-subtle);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--paper-border);
+      padding: 8px;
+      max-height: 190px;
+    }
+
+    #savedPlacesList > div {
+      border-bottom: 1px solid var(--paper-border);
+    }
+
+    /* PWA Guide Modal */
+    .pwa-guide-steps {
+      font-size: var(--text-sm);
+      color: var(--ink-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .pwa-guide-platform {
+      background: var(--paper-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .pwa-guide-platform strong {
+      display: block;
+      color: var(--ink-primary);
+      margin-bottom: 6px;
+      font-size: var(--text-sm);
+    }
+
+    .pwa-guide-platform ol {
+      padding-left: 18px;
+      margin: 0;
+    }
+
+    .pwa-guide-platform li {
+      margin-bottom: 4px;
+    }
+
+    /* App Toast */
+    .app-toast {
+      position: fixed;
+      top: calc(var(--safe-top) + 16px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-35px);
+      background: var(--ink-primary);
+      border: 1px solid var(--paper-border-strong);
+      box-shadow: var(--shadow-lg);
+      padding: 9px 18px;
+      border-radius: var(--radius-full);
+      color: #FFFFFF;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .app-toast.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Floating Heart for Ping */
+    .floating-heart {
+      position: fixed;
+      bottom: 80px;
+      pointer-events: none;
+      font-size: var(--text-2xl);
+      z-index: 9999;
+      animation: floatHeartUp 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes floatHeartUp {
+      0% { transform: translateY(0) scale(0.6); opacity: 0; }
+      15% { opacity: 1; transform: translateY(-40px) scale(1.1); }
+      75% { opacity: 0.9; }
+      100% { transform: translateY(-380px) scale(0.9); opacity: 0; }
+    }
+
+    /* Responsive Mobile Sheet Drawer for Modals (max-width: 640px) */
+    @media (max-width: 640px) {
+      body .modal-overlay {
+        justify-content: flex-end;
+        padding: 0;
+      }
+      body .modal-overlay .modal-card {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-top-left-radius: var(--radius-xl);
+        border-top-right-radius: var(--radius-xl);
+        max-width: 100%;
+        width: 100%;
+        border-bottom: none;
+        border-left: none;
+        border-right: none;
+        padding: 20px 18px calc(var(--safe-bottom) + 16px) 18px;
+        animation: modal-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes modal-slide-up {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+    }
+
+    /* Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Fullscreen Modern Map -->
+  <div id="map"></div>
+  <div id="appToast" class="app-toast" role="status" aria-live="polite"></div>
+
+  <!-- Header Minimalist Bar -->
+  <header class="header-hud">
+    <div class="brand-pill">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-text" id="hudDeviceName">Tanpilan GPS</div>
+        <div id="hudSubStatus" class="brand-status-sub">Mencari Sinyal GPS...</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openPairModal()" title="Hubungkan Pasangan" aria-label="Hubungkan Pasangan">
+        <app-icon name="link" size="18"></app-icon>
+      </button>
+      <button class="icon-btn" onclick="openSettingsModal()" title="Pengaturan Akun" aria-label="Pengaturan Akun">
+        <app-icon name="settings" size="18"></app-icon>
+      </button>
+    </div>
+  </header>
+
+  <!-- Banner Status Sambungan (State 5) -->
+  <div id="connectionBanner" class="connection-status-banner" role="status" aria-live="polite">
+    <app-icon name="alert" size="14"></app-icon>
+    <span>Menyambung ulang ke server…</span>
+  </div>
+
+  <!-- PWA Guidance Banner (Add to Home Screen) -->
+  <div id="pwaBanner" class="pwa-banner" role="banner">
+    <div class="pwa-banner-text">
+      <strong>Pasang di Layar Utama HP</strong>
+      <span>Akses cepat tanpa browser bar</span>
+    </div>
+    <button onclick="showPwaInstructions()" class="btn-pwa-install">
+      Pasang
+    </button>
+    <button onclick="closePwaBanner()" class="btn-pwa-close" aria-label="Tutup Banner">
+      <app-icon name="close" size="14"></app-icon>
+    </button>
+  </div>
+
+  <!-- Floating Distance & Travel HUD (Primary Dominant Metric) -->
+  <div class="distance-floating-hud" onclick="fitBoth()" title="Ketuk untuk melihat kedua perangkat di peta" role="button" tabindex="0" aria-label="Lihat kedua perangkat di peta">
+    <div class="dist-tag">
+      <span>JARAK KE PASANGAN</span>
+    </div>
+    <div class="dist-number" id="floatingDistanceText">Menghubungkan...</div>
+    <div id="floatingCompassBearing" class="floating-compass-pill"></div>
+  </div>
+
+  <!-- Floating Map Controls Dock (Grouped & Labeled) -->
+  <div class="map-tools-rail" id="mapToolsRail">
+    <!-- Map Utilities Group (Layer Switcher & History) -->
+    <div class="map-utility-group" role="group" aria-label="Alat Peta">
+      <button class="tool-fab" id="fabLayerToggle" onclick="cycleMapStyle()"
+        title="Ganti Lapisan Peta" aria-label="Ganti Lapisan Peta" data-label="Ganti Peta">
+        <app-icon name="moon" size="18"></app-icon>
+      </button>
+      <button class="tool-fab" id="fabHistoryToggle" onclick="openHistoryModal()"
+        title="Riwayat Jejak Perjalanan" aria-label="Riwayat Jejak Perjalanan" data-label="Riwayat Jejak">
+        <app-icon name="navigation" size="18"></app-icon>
+      </button>
+    </div>
+
+    <!-- Segmented Camera Control Capsule -->
+    <div class="camera-control-capsule" role="toolbar" aria-label="Kontrol Kamera Peta">
+      <button class="capsule-segment partner-segment" onclick="focusPartner()" title="Fokus ke Pasangan" aria-label="Fokus Pasangan" data-label="Fokus Pasangan">
+        <app-icon name="heart" size="17"></app-icon>
+        <div class="partner-pulse-dot" id="partnerPulseDot"></div>
+      </button>
+      <div class="capsule-divider"></div>
+      <button class="capsule-segment fit-segment" onclick="fitBoth()" title="Tampilkan Keduanya di Peta" aria-label="Tampilkan Keduanya" data-label="Lihat Keduanya">
+        <app-icon name="map" size="17"></app-icon>
+      </button>
+      <div class="capsule-divider"></div>
+      <button class="capsule-segment me-segment" onclick="focusMe()" title="Fokus ke Posisi Saya" aria-label="Posisi Saya" data-label="Posisi Saya">
+        <app-icon name="crosshair" size="17"></app-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom Sheet: Partner Telemetry & Detailed Dashboard -->
+  <div class="bottom-partner-sheet" id="bottomPartnerSheet">
+    <!-- Handle bar for toggling sheet expansion -->
+    <div class="sheet-handle-bar" onclick="toggleSheetExpand()" title="Geser / Ketuk untuk melihat detail" role="button" tabindex="0" aria-label="Buka atau tutup detail pasangan" aria-expanded="false"></div>
+
+    <div class="partner-info-row">
+      <div class="partner-user-block" onclick="toggleSheetExpand()" role="button" tabindex="0" aria-label="Buka detail telemetri pasangan">
+        <div class="partner-avatar-wrap">
+          <div class="avatar-circle" id="partnerAvatarIcon">
+            <app-icon name="couple" size="22"></app-icon>
+          </div>
+          <div class="online-indicator-badge"></div>
+        </div>
+        <div>
+          <div class="partner-title-text">
+            <span id="sheetPartnerTitle">Pasangan Anda</span>
+            <span class="place-badge" id="partnerPlaceBadge" style="display:none;"></span>
+            <span class="proximity-badge" id="partnerProximityBadge"></span>
+          </div>
+          <div class="partner-status-pill" id="sheetBatterySpeedPill">
+            <span class="pill-badge" id="pillBattery"><app-icon name="battery" size="13"></app-icon><span>--%</span></span>
+            <span class="pill-badge" id="pillActivity"><app-icon name="stop" size="13"></app-icon><span>Diam</span></span>
+            <span class="pill-badge" id="pillGpsMode" title="Mode Frekuensi Transmisi GPS"><app-icon name="lightning" size="13"></app-icon><span>10s Aktif</span></span>
+          </div>
+        </div>
+      </div>
+
+      <button class="icon-btn pair-mini-btn" onclick="openPairModal()" title="Hubungkan Pasangan">
+        <app-icon name="link" size="14"></app-icon>
+        <span>Pair</span>
+      </button>
+    </div>
+
+    <!-- Live Physical Address Box -->
+    <div class="partner-address-box">
+      <div class="address-text" id="partnerAddressLabel">Mencari alamat lokasi pasangan...</div>
+      <div class="time-ticker" id="partnerLastSeenTicker">Baru saja</div>
+    </div>
+
+    <!-- Expandable Telemetry Cards (Visible when Bottom Sheet is expanded) -->
+    <div class="telemetry-expand-grid">
+      <div class="telemetry-card">
+        <div class="telemetry-label"><app-icon name="compass" size="13"></app-icon> Arah & Kompas</div>
+        <div class="telemetry-value" id="cardCompassVal"><span class="empty-state-text">Menunggu sinyal pasangan</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="telemetry-label"><app-icon name="satellite" size="13"></app-icon> Kualitas Sinyal</div>
+        <div class="telemetry-value" id="cardAccuracyVal">±5 m (Presisi)</div>
+      </div>
+      <div class="telemetry-card">
+        <div class="telemetry-label"><app-icon name="pin" size="13"></app-icon> Koordinat Pasangan</div>
+        <div class="telemetry-value" id="cardCoordsVal" onclick="copyPartnerCoords()" role="button" tabindex="0" aria-label="Salin koordinat GPS pasangan" title="Ketuk untuk salin"><span class="empty-state-text">Menunggu koordinat</span></div>
+      </div>
+      <div class="telemetry-card clickable-card" id="fabPlacesToggle" onclick="openPlacesModal()" role="button" tabindex="0" aria-label="Kelola tempat favorit" title="Kelola Tempat Favorit">
+        <div class="telemetry-label"><app-icon name="home" size="13"></app-icon> Tempat Favorit</div>
+        <div class="telemetry-value highlight-green" id="cardPlaceVal">+ Tandai Tempat</div>
+      </div>
+    </div>
+
+    <!-- Quick Action Navigation Row: Clear Hierarchy (1 Primary, 2 Secondary) -->
+    <div class="sheet-btn-row">
+      <button class="btn-action-sheet btn-nav" onclick="openNavigationModal()">
+        <app-icon name="navigation" size="16"></app-icon> Rute ke Pasangan
+      </button>
+      <button class="btn-action-sheet btn-poke" onclick="sendLovePoke('heart')">
+        <app-icon name="heart" size="16"></app-icon> Sapa Pasangan
+      </button>
+      <button class="btn-action-sheet btn-share" onclick="shareLiveTrackingWhatsApp()">
+        <app-icon name="whatsapp" size="16"></app-icon> Bagikan WA
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Onboarding / Pilih Identitas -->
+  <div id="onboardingModal" class="modal-overlay">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="onboardingModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="onboardingModalTitle">Selamat Datang di Tanpilan</div>
+      </div>
+      <p class="modal-description">
+        Pelacakan lokasi dua perangkat pasangan secara transparan, tenang, dan realtime tanpa batas jarak.
+      </p>
+
+      <div class="role-grid">
+        <div class="role-card-select active" id="roleSelectWanita" onclick="chooseRole('Wanita')" role="button" tabindex="0" aria-label="Pilih peran Wanita">
+          <div class="role-icon-box">
+            <app-icon name="woman" size="32"></app-icon>
+          </div>
+          <strong class="role-title">Wanita</strong>
+          <span class="role-subtitle">Perangkat #1</span>
+        </div>
+        <div class="role-card-select" id="roleSelectPria" onclick="chooseRole('Pria')" role="button" tabindex="0" aria-label="Pilih peran Pria">
+          <div class="role-icon-box">
+            <app-icon name="man" size="32"></app-icon>
+          </div>
+          <strong class="role-title">Pria</strong>
+          <span class="role-subtitle">Perangkat #2</span>
+        </div>
+      </div>
+
+      <input type="text" id="customNameInput" placeholder="Atau ketik nama panggilan Anda" class="input-text-standard" />
+
+      <button class="btn-submit-action" onclick="finishOnboarding()">
+        Mulai Pelacakan Sekarang
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Pairing Pasangan & QR Code Instant Scanner -->
+  <div id="pairingModal" class="modal-overlay">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pairingModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="pairingModalTitle">Hubungkan Pasangan</div>
+        <button class="btn-close-modal" onclick="closeModal('pairingModal')" aria-label="Tutup Modal Hubungkan">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+
+      <!-- Kode & QR Code Perangkat Saya: KODE IS THE DOMINANT HERO -->
+      <div class="pairing-container-card">
+        <div class="pairing-section-label">KODE PAIRING PERANGKAT ANDA</div>
+        <div class="pairing-pin-display" onclick="copyPairCode()" title="Ketuk untuk menyalin kode" role="button" tabindex="0" aria-label="Salin kode pairing">
+          <div class="pin-code-text" id="myPairPinDisplay">------</div>
+          <div class="pin-code-hint">
+            <app-icon name="copy" size="12"></app-icon> Ketuk untuk menyalin kode
+          </div>
+        </div>
+
+        <!-- QR Code Container for 1-Tap Mobile Scan -->
+        <div id="pairingQrContainer" class="qr-container-box"></div>
+
+        <button class="btn-whatsapp-action" onclick="shareLiveTrackingWhatsApp()">
+          <app-icon name="whatsapp" size="18"></app-icon> Kirim Link & Kode via WhatsApp
+        </button>
+      </div>
+
+      <!-- Input Kode dari Pasangan -->
+      <div class="pairing-entry-card">
+        <div class="pairing-section-label">ATAU MASUKKAN KODE PASANGAN</div>
+        <input type="text" id="inputPartnerCode" class="input-pin-entry" placeholder="MASUKKAN KODE" maxlength="6" autocomplete="off" />
+        <button class="btn-submit-action" onclick="submitPairCode()">
+          Hubungkan Perangkat Sekarang
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Pengaturan -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="settingsModalTitle">Pengaturan Akun</div>
+        <button class="btn-close-modal" onclick="closeModal('settingsModal')" aria-label="Tutup Pengaturan">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+
+      <!-- Grup 1: Profil & Perangkat -->
+      <div class="settings-group">
+        <div class="settings-group-title">Profil Perangkat Ini</div>
+        <div class="settings-row">
+          <span class="settings-label">Nama Perangkat</span>
+          <span class="settings-value" id="setDevName">-</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Daya Baterai</span>
+          <span class="settings-value" id="setMyBattery">-</span>
+        </div>
+      </div>
+
+      <!-- Grup 2: Sambungan & Privasi -->
+      <div class="settings-group">
+        <div class="settings-group-title">Sambungan & Privasi</div>
+        <div class="settings-row">
+          <span class="settings-label">Pembaruan Lokasi</span>
+          <span class="settings-value settings-tag status-live">Setiap 10 Detik</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Keamanan Jalur</span>
+          <span class="settings-value">Terenkripsi Antar Perangkat</span>
+        </div>
+      </div>
+
+      <!-- Grup 3: Info Teknis Ringkas (Collapsible) -->
+      <details class="settings-technical-details">
+        <summary class="technical-summary">Info Teknis Sistem</summary>
+        <div class="technical-content">
+          <div class="settings-row-subtle">
+            <span>ID Perangkat:</span>
+            <code class="code-mono" id="setDevId">-</code>
+          </div>
+          <div class="settings-row-subtle">
+            <span>Protokol Enkripsi:</span>
+            <span>TLS 1.3 / HTTPS & WSS</span>
+          </div>
+        </div>
+      </details>
+
+      <div class="settings-actions">
+        <button class="btn-danger-action" onclick="resetProfile()">
+          <app-icon name="trash" size="15"></app-icon> Keluar & Ganti Akun
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Riwayat Jejak Perjalanan (Breadcrumbs / History Trail) -->
+  <div id="historyModal" class="modal-overlay">
+    <div class="modal-card history-modal-card" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="historyModalTitle">Riwayat Jejak Perjalanan</div>
+        <button class="btn-close-modal" onclick="closeModal('historyModal')" aria-label="Tutup Riwayat">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+
+      <!-- Target Device Selector -->
+      <div class="segmented-tabs" role="tablist">
+        <button id="histTargetPartner" class="segmented-tab-btn is-active" onclick="selectHistoryTarget('partner')" role="tab" aria-selected="true">
+          <app-icon name="heart" size="14"></app-icon> Jejak Pasangan
+        </button>
+        <button id="histTargetMe" class="segmented-tab-btn" onclick="selectHistoryTarget('me')" role="tab" aria-selected="false">
+          <app-icon name="crosshair" size="14"></app-icon> Jejak Saya
+        </button>
+      </div>
+
+      <!-- Ringkasan Perjalanan Hari Ini (Semua angka pakai tinta terpadu & monospace tabular) -->
+      <div id="dailySummaryCard" class="daily-summary-card">
+        <div class="summary-card-header">
+          <span class="summary-badge-title">
+            <app-icon name="chart" size="14"></app-icon> RINGKASAN HARI INI
+          </span>
+          <span id="summaryDateLabel" class="summary-date-text">Hari Ini</span>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-stat-box">
+            <div class="summary-stat-label">Total Jarak</div>
+            <div id="summaryDailyDist" class="summary-stat-val">--</div>
+          </div>
+          <div class="summary-stat-box">
+            <div class="summary-stat-label">Waktu Gerak</div>
+            <div id="summaryDailyTime" class="summary-stat-val">--</div>
+          </div>
+          <div class="summary-stat-box">
+            <div class="summary-stat-label">Titik GPS</div>
+            <div id="summaryDailyPoints" class="summary-stat-val">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Controls -->
+      <div class="history-actions-row">
+        <button class="btn-submit-action history-render-btn" onclick="loadAndRenderHistoryTrail()">
+          <app-icon name="map" size="15"></app-icon> Tampilkan di Peta
+        </button>
+        <button class="btn-secondary-action history-clear-btn" onclick="clearHistoryTrail()" title="Hapus garis jejak dari peta" aria-label="Hapus jejak dari peta">
+          <app-icon name="trash" size="15"></app-icon>
+        </button>
+      </div>
+
+      <!-- List of History Points with Theme Scrollbar -->
+      <div class="history-list-header">
+        <span>DAFTAR TITIK REKAMAN:</span>
+        <span id="histPointCount" class="point-count-text">0 Titik</span>
+      </div>
+      <div id="historyPointsList" class="history-scroll-box">
+        <div class="history-empty-message">Memuat data riwayat...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Navigasi Cepat (Google Maps & Waze) -->
+  <div id="navigationModal" class="modal-overlay">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="navModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="navModalTitle">
+          <app-icon name="navigation" size="18"></app-icon> Rute Menuju Pasangan
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('navigationModal')" aria-label="Tutup Navigasi">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+      <p class="modal-description">
+        Pilih aplikasi navigasi untuk langsung membuka penunjuk arah ke titik GPS pasangan Anda:
+      </p>
+
+      <div class="nav-app-buttons">
+        <button class="btn-submit-action nav-google-btn" onclick="openDirectGoogleMaps()">
+          <app-icon name="map" size="18"></app-icon> Buka Google Maps
+        </button>
+        <button class="btn-secondary-action nav-waze-btn" onclick="openDirectWaze()">
+          <app-icon name="car" size="18"></app-icon> Buka di Waze
+        </button>
+        <button class="btn-secondary-action nav-copy-btn" onclick="copyPartnerCoordsModal()">
+          <app-icon name="pin" size="16"></app-icon> Salin Titik Koordinat GPS
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tempat Favorit & Geofencing -->
+  <div id="placesModal" class="modal-overlay">
+    <div class="modal-card places-modal-card" role="dialog" aria-modal="true" aria-labelledby="placesModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="placesModalTitle">
+          <app-icon name="home" size="18"></app-icon> Tempat Favorit
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('placesModal')" aria-label="Tutup Tempat Favorit">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+
+      <p class="modal-description">
+        Tandai lokasi penting (Rumah, Kantor, Kost). Status pasangan otomatis menampilkan nama tempat saat berada di area tersebut.
+      </p>
+
+      <!-- Quick Add Place -->
+      <div class="new-place-box">
+        <div class="place-box-title">+ SIMPAN TEMPAT BARU</div>
+        <input type="text" id="newPlaceNameInput" placeholder="Nama Tempat (misal: Rumah, Kantor)" class="input-text-standard" />
+        
+        <div class="place-source-toggle">
+          <button type="button" class="btn-source-toggle is-active" id="btnPlaceSourcePartner" onclick="setPlaceSource('partner')">
+            <app-icon name="heart" size="13"></app-icon> Posisi Pasangan
+          </button>
+          <button type="button" class="btn-source-toggle" id="btnPlaceSourceMe" onclick="setPlaceSource('me')">
+            <app-icon name="crosshair" size="13"></app-icon> Posisi Saya
+          </button>
+        </div>
+
+        <button class="btn-submit-action" onclick="saveNewPlace()">
+          Simpan Lokasi Ini
+        </button>
+      </div>
+
+      <div class="places-list-header">
+        <span>DAFTAR TEMPAT TERSIMPAN:</span>
+        <span id="savedPlacesCount" class="point-count-text">0 Tempat</span>
+      </div>
+      <div id="savedPlacesList" class="places-scroll-box">
+        <div class="places-empty-message">Memuat tempat tersimpan...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Panduan Add to Home Screen (PWA) -->
+  <div id="pwaGuideModal" class="modal-overlay">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pwaModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="pwaModalTitle">Pasang Aplikasi di HP</div>
+        <button class="btn-close-modal" onclick="closeModal('pwaGuideModal')" aria-label="Tutup Panduan">
+          <app-icon name="close" size="16"></app-icon>
+        </button>
+      </div>
+
+      <div class="pwa-guide-steps">
+        <div class="pwa-guide-platform">
+          <strong>Di Android (Chrome / Edge):</strong>
+          <ol>
+            <li>Ketuk ikon titik tiga (<strong>⋮</strong>) di pojok kanan atas browser.</li>
+            <li>Pilih <strong>"Tambahkan ke Layar Utama" (Add to Home screen)</strong>.</li>
+            <li>Ketuk <strong>Instal</strong>. Ikon Tanpilan siap digunakan!</li>
+          </ol>
+        </div>
+        <div class="pwa-guide-platform">
+          <strong>Di iPhone / iPad (Safari):</strong>
+          <ol>
+            <li>Ketuk tombol Bagikan (<strong>ikon kotak dengan panah ke atas</strong>) di bilah bawah.</li>
+            <li>Gulir ke bawah dan pilih <strong>"Add to Home Screen" (Tambahkan ke Layar Utama)</strong>.</li>
+            <li>Ketuk <strong>Add</strong> di pojok kanan atas.</li>
+          </ol>
+        </div>
+      </div>
+
+      <button class="btn-submit-action" onclick="closeModal('pwaGuideModal')">
+        Mengerti
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Aksesibilitas: Keyboard Focus Trap & Escape Handler
+    window.addEventListener('keydown', (e) => {
+      const activeModal = document.querySelector('.modal-overlay.active');
+      if (!activeModal) return;
+
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
+        if (activeModal.id) closeModal(activeModal.id);
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusables = Array.from(activeModal.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )).filter(el => !el.disabled && el.offsetParent !== null);
+
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    // Enter & Space keyhandler untuk role="button"
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute('role') === 'button') {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          e.target.click();
+        }
+      }
+    });
+
+    // Bypass ngrok free warning interstitial for all background AJAX/API requests
+    const _origFetch = window.fetch;
+    window.fetch = function(url, options = {}) {
+      options.headers = options.headers || {};
+      if (typeof options.headers.set === 'function') {
+        options.headers.set('ngrok-skip-browser-warning', '69420');
+      } else if (Array.isArray(options.headers)) {
+        options.headers.push(['ngrok-skip-browser-warning', '69420']);
+      } else {
+        options.headers['ngrok-skip-browser-warning'] = '69420';
+      }
+      return _origFetch(url, options);
+    };
+
+    // State Aplikasi
+    const appState = {
+      user: null,
+      device: null,
+      partner: null,
+      myCoords: { latitude: -7.8013885, longitude: 110.3647176, accuracy: 5, speed: 0 },
+      myBattery: 90,
+      myCharging: false,
+      partnerCoords: null,
+      partnerAddress: 'Belum terhubung',
+      distanceMeters: null,
+      ws: null,
+      selectedRole: 'Wanita',
+      mapStyleIndex: 0,
+      lastPartnerUpdate: null,
+      qrInstance: null,
+      gpsIntervalId: null,
+      selectedPlaceSource: 'partner',
+      currentGpsInterval: 10000,
+      gpsSamples: [],
+      stationarySince: null,
+      partnerMatchedPlace: null
+    };
+
+    let map, markerMe, markerPartner, polyline, accCircle;
+    let baseTileLayer;
+    let historyLayerGroup = null;
+    let activeHistoryTarget = 'partner';
+    let currentHistoryData = [];
+
+    // Pilihan Tampilan Peta (Bebas Watermark & 100% Gratis Tanpa Butuh API Key)
+    const MAP_STYLES = [
+      {
+        name: 'Dark Mode',
+        iconName: 'moon',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        maxZoom: 19,
+        className: 'dark-tiles'
+      },
+      {
+        name: 'Satelit Nyata',
+        iconName: 'satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        maxZoom: 19,
+        className: ''
+      },
+      {
+        name: 'Peta Terang',
+        iconName: 'sun',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        maxZoom: 19,
+        className: ''
+      }
+    ];
+
+    window.onload = () => {
+      initBatteryMonitoring();
+      initMap();
+      checkAuthSession();
+      startTickerInterval();
+      checkAutoPairParam();
+      checkPwaDisplay();
+      initWakeLock();
+    };
+
+    function initBatteryMonitoring() {
+      if (navigator.getBattery) {
+        navigator.getBattery().then(bat => {
+          const update = () => {
+            appState.myBattery = Math.round(bat.level * 100);
+            appState.myCharging = bat.charging;
+            const batEl = document.getElementById('setMyBattery');
+            if (batEl) {
+              const icon = AppIcons.get(bat.charging ? 'battery-charging' : 'battery', { size: 14 });
+              batEl.innerHTML = `${icon} ${appState.myBattery}% ${bat.charging ? '(Mengisi Daya)' : ''}`;
+            }
+          };
+          update();
+          bat.addEventListener('levelchange', update);
+          bat.addEventListener('chargingchange', update);
+        }).catch(() => { });
+      }
+    }
+
+    function initMap() {
+      if (typeof L === 'undefined') {
+        console.warn('Leaflet JS belum termuat. Cek koneksi internet untuk memuat peta.');
+        return;
+      }
+
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false,
+        preferCanvas: true
+      }).setView([appState.myCoords.latitude, appState.myCoords.longitude], 16);
+      baseTileLayer = L.tileLayer(MAP_STYLES[0].url, {
+        maxZoom: MAP_STYLES[0].maxZoom,
+        className: MAP_STYLES[0].className || ''
+      }).addTo(map);
+
+      // Icon Me (Cyan Radar Pulse)
+      const iconMe = L.divIcon({
+        className: 'radar-beacon',
+        html: '<div class="beacon-ripple-me"></div><div class="beacon-core-me"></div>',
+        iconSize: [52, 52],
+        iconAnchor: [26, 26]
+      });
+
+      markerMe = L.marker([appState.myCoords.latitude, appState.myCoords.longitude], { icon: iconMe, draggable: false })
+        .addTo(map).bindTooltip('Posisi Saya', { permanent: false, direction: 'top' });
+
+      // Accuracy halo
+      accCircle = L.circle([appState.myCoords.latitude, appState.myCoords.longitude], {
+        radius: 12,
+        className: 'acc-circle'
+      }).addTo(map);
+
+      // Connecting Polyline
+      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-terracotta').trim() || '#BF5129';
+      polyline = L.polyline([], {
+        color: accentColor,
+        weight: 3.5,
+        dashArray: '8, 12',
+        opacity: 0.85
+      }).addTo(map);
+
+      // Layer Group untuk Riwayat Jejak (Breadcrumbs Trail)
+      historyLayerGroup = L.layerGroup().addTo(map);
+
+      // Pastikan Leaflet menghitung ulang ukuran kontainer pada layar HP
+      setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+      setTimeout(() => { if (map) map.invalidateSize(); }, 1200);
+      window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+    }
+
+    function cycleMapStyle() {
+      triggerHaptic('light');
+      appState.mapStyleIndex = (appState.mapStyleIndex + 1) % MAP_STYLES.length;
+      const current = MAP_STYLES[appState.mapStyleIndex];
+
+      map.removeLayer(baseTileLayer);
+      baseTileLayer = L.tileLayer(current.url, {
+        maxZoom: current.maxZoom,
+        className: current.className || ''
+      }).addTo(map);
+
+      const fab = document.getElementById('fabLayerToggle');
+      if (fab) fab.innerHTML = AppIcons.get(current.iconName, { size: 20 });
+    }
+
+    function toggleSheetExpand() {
+      triggerHaptic('light');
+      const sheet = document.getElementById('bottomPartnerSheet');
+      const isExpanded = sheet.classList.toggle('expanded');
+      const handle = document.querySelector('.sheet-handle-bar');
+      if (handle) {
+        handle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      }
+      const rail = document.getElementById('mapToolsRail');
+      if (rail) {
+        if (isExpanded) {
+          rail.classList.add('sheet-expanded');
+        } else {
+          rail.classList.remove('sheet-expanded');
+        }
+      }
+    }
+
+    function checkAuthSession() {
+      const savedUser = localStorage.getItem('tanpilan_user');
+      const savedDev = localStorage.getItem('tanpilan_device');
+
+      if (savedUser && savedDev) {
+        appState.user = JSON.parse(savedUser);
+        appState.device = JSON.parse(savedDev);
+        onSessionReady();
+      } else {
+        document.getElementById('onboardingModal').classList.add('active');
+      }
+    }
+
+    function chooseRole(role) {
+      triggerHaptic('light');
+      appState.selectedRole = role;
+      document.getElementById('roleSelectWanita').classList.toggle('active', role === 'Wanita');
+      document.getElementById('roleSelectPria').classList.toggle('active', role === 'Pria');
+    }
+
+    async function finishOnboarding() {
+      const custom = document.getElementById('customNameInput').value.trim();
+      const chosen = custom || appState.selectedRole;
+      const email = `${chosen.toLowerCase().replace(/\s+/g, '')}_${Date.now()}@tanpilan.local`;
+
+      try {
+        const authRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'Password123' })
+        }).then(r => r.json());
+
+        const devToken = `dev_${authRes.user.id}_${Date.now()}`;
+        const devRes = await fetch('/api/device/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authRes.token}` },
+          body: JSON.stringify({ deviceToken: devToken, deviceName: `HP ${chosen}` })
+        }).then(r => r.json());
+
+        appState.user = authRes.user;
+        appState.user.token = authRes.token;
+        appState.device = devRes.device;
+
+        localStorage.setItem('tanpilan_user', JSON.stringify(appState.user));
+        localStorage.setItem('tanpilan_device', JSON.stringify(appState.device));
+
+        document.getElementById('onboardingModal').classList.remove('active');
+        onSessionReady();
+      } catch (err) {
+        alert('Gagal registrasi: ' + err.message);
+      }
+    }
+
+    function onSessionReady() {
+      document.getElementById('hudDeviceName').textContent = appState.device.device_name;
+      document.getElementById('setDevName').textContent = appState.device.device_name;
+      document.getElementById('setDevId').textContent = `#${appState.device.id}`;
+
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 200);
+
+      initWebSocket();
+      startGpsTracking();
+      loadPartnerTelemetry();
+      generatePairingCode();
+    }
+
+    function startGpsTracking() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(handleGpsSuccess, handleGpsError, { enableHighAccuracy: true });
+
+        navigator.geolocation.watchPosition(
+          handleGpsSuccess,
+          handleGpsError,
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+
+      // Loop Transmisi GPS Otomatis Setiap 10 Detik (Sesuai Kebutuhan Sistem)
+      if (appState.gpsIntervalId) clearInterval(appState.gpsIntervalId);
+      appState.gpsIntervalId = setInterval(transmitLocation, 10000);
+    }
+
+    let isFirstCentered = false;
+
+    function handleGpsSuccess(pos) {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy || 5);
+      const speed = pos.coords.speed || 0;
+
+      appState.myCoords = { latitude: lat, longitude: lng, accuracy: acc, speed };
+
+      markerMe.setLatLng([lat, lng]);
+      accCircle.setLatLng([lat, lng]);
+      accCircle.setRadius(acc);
+
+      if (!isFirstCentered) {
+        map.setView([lat, lng], 17);
+        isFirstCentered = true;
+      }
+
+      updatePolyline();
+      transmitLocation();
+      evaluateAdaptiveGps(pos);
+
+      const subStatus = document.getElementById('hudSubStatus');
+      if (subStatus) {
+        subStatus.innerHTML = `<span class="substatus-pill status-live">${AppIcons.get('lock', { size: 12 })} Satelit Terkunci (±${acc}m)</span>`;
+      }
+    }
+
+    function handleGpsError(err) {
+      console.warn('GPS Info:', err.message);
+      const subStatus = document.getElementById('hudSubStatus');
+      if (subStatus) {
+        subStatus.innerHTML = `<span class="substatus-pill status-standby">${AppIcons.get('alert', { size: 12 })} Menunggu Izin GPS...</span>`;
+      }
+    }
+
+    async function transmitLocation() {
+      if (!appState.device) return;
+
+      const payload = {
+        latitude: appState.myCoords.latitude,
+        longitude: appState.myCoords.longitude,
+        accuracy: appState.myCoords.accuracy || 5,
+        speed: appState.myCoords.speed || 0,
+        battery: appState.myBattery || 90
+      };
+
+      if (appState.ws && appState.ws.readyState === WebSocket.OPEN) {
+        appState.ws.send(JSON.stringify({ event: 'location_update', data: payload }));
+      } else {
+        fetch('/api/location/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Token': appState.device.device_token },
+          body: JSON.stringify(payload)
+        }).catch(() => { });
+      }
+    }
+
+    function initWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws?device_token=${appState.device.device_token}`;
+
+      appState.ws = new WebSocket(wsUrl);
+
+      appState.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.event === 'partner_location_update') {
+            onPartnerLocationUpdate(msg.data);
+          } else if (msg.event === 'partner_poke_received') {
+            onPartnerPokeReceived(msg.data);
+          } else if (msg.event === 'pairing_success') {
+            triggerHaptic('success');
+            alert(msg.data.message);
+            loadPartnerTelemetry();
+          }
+        } catch (e) { }
+      };
+
+      appState.ws.onopen = () => {
+        const banner = document.getElementById('connectionBanner');
+        if (banner) banner.classList.remove('is-active');
+        updateConnectionStateHUD();
+      };
+
+      appState.ws.onclose = () => {
+        const banner = document.getElementById('connectionBanner');
+        if (banner) banner.classList.add('is-active');
+        updateConnectionStateHUD();
+        setTimeout(initWebSocket, 3000);
+      };
+    }
+
+    function onPartnerLocationUpdate(data) {
+      appState.lastPartnerUpdate = new Date();
+      appState.partnerCoords = { latitude: data.location.latitude, longitude: data.location.longitude };
+      appState.distanceMeters = data.distanceToPartner;
+
+      // Update Icon Partner with clean vector asset
+      if (!markerPartner) {
+        const iconPartner = L.divIcon({
+          className: 'radar-beacon',
+          html: '<div class="beacon-ripple-partner"></div><div class="beacon-core-partner">' + AppIcons.get('heart', { size: 14, color: '#FFFFFF' }) + '</div>',
+          iconSize: [58, 58],
+          iconAnchor: [29, 29]
+        });
+        markerPartner = L.marker([data.location.latitude, data.location.longitude], { icon: iconPartner, draggable: false })
+          .addTo(map).bindTooltip(data.deviceName || 'Pasangan', { permanent: false, direction: 'top' });
+      } else {
+        markerPartner.setLatLng([data.location.latitude, data.location.longitude]);
+      }
+
+      updatePolyline();
+
+      // UI Distance HUD
+      updateConnectionStateHUD();
+
+      // Compass & Direction Calculation
+      const bearing = calculateBearing(
+        appState.myCoords.latitude, appState.myCoords.longitude,
+        data.location.latitude, data.location.longitude
+      );
+      const compassText = getCompassDirection(bearing);
+      const compassEl = document.getElementById('floatingCompassBearing');
+      if (compassEl) {
+        compassEl.innerHTML = `${AppIcons.get('compass', { size: 13, style: 'margin-right:4px;' })} Menuju ${compassText} (${bearing}°)`;
+      }
+      document.getElementById('cardCompassVal').textContent = `${compassText} (${bearing}°)`;
+
+      // Partner Status Pill: Battery & Activity
+      const speedKmH = Math.round((data.location.speed || 0) * 3.6);
+      let activityIcon = 'stop';
+      let activityLabel = 'Diam';
+      if (speedKmH > 25) {
+        activityIcon = 'car';
+        activityLabel = `Mobil/Motor ${speedKmH} km/h`;
+      } else if (speedKmH > 7) {
+        activityIcon = 'bike';
+        activityLabel = `Bergerak ${speedKmH} km/h`;
+      } else if (speedKmH > 2) {
+        activityIcon = 'walk';
+        activityLabel = `Jalan Kaki ${speedKmH} km/h`;
+      }
+
+      const batPercent = data.battery || 90;
+      document.getElementById('pillBattery').innerHTML = `${AppIcons.get('battery', { size: 14 })} <span>${batPercent}%</span>`;
+      document.getElementById('pillActivity').innerHTML = `${AppIcons.get(activityIcon, { size: 14 })} <span>${activityLabel}</span>`;
+      document.getElementById('sheetPartnerTitle').textContent = data.deviceName || 'Pasangan';
+
+      // Partner Connection Status Badge
+      const proxBadge = document.getElementById('partnerProximityBadge');
+      if (proxBadge && data.distanceToPartner !== null) {
+        proxBadge.innerHTML = '<span class="status-indicator-dot online"></span> Terhubung Realtime';
+        proxBadge.className = 'proximity-badge status-live';
+      }
+
+      // Telemetry Cards
+      document.getElementById('cardAccuracyVal').textContent = `±${Math.round(data.location.accuracy || 5)} meter`;
+      document.getElementById('cardCoordsVal').textContent = `${data.location.latitude.toFixed(5)}, ${data.location.longitude.toFixed(5)}`;
+
+      // Reverse geocode address
+      resolvePartnerAddress(data.location.latitude, data.location.longitude);
+
+      // Fitur 5: Update Matched Place Badge (Geofencing)
+      const placeBadge = document.getElementById('partnerPlaceBadge');
+      const cardPlaceVal = document.getElementById('cardPlaceVal');
+      if (data.matchedPlace) {
+        appState.partnerMatchedPlace = data.matchedPlace;
+        if (placeBadge) {
+          placeBadge.style.display = 'inline-flex';
+          placeBadge.className = 'place-badge is-live';
+          placeBadge.innerHTML = `${AppIcons.get('home', { size: 12 })} ${data.matchedPlace.name}`;
+        }
+        if (cardPlaceVal) cardPlaceVal.textContent = data.matchedPlace.name;
+      } else {
+        appState.partnerMatchedPlace = null;
+        if (placeBadge) {
+          if (speedKmH > 5) {
+            placeBadge.style.display = 'inline-flex';
+            placeBadge.className = 'place-badge is-transit';
+            placeBadge.innerHTML = `${AppIcons.get('car', { size: 12 })} Di Perjalanan`;
+          } else {
+            placeBadge.style.display = 'none';
+          }
+        }
+        if (cardPlaceVal) cardPlaceVal.textContent = '+ Tandai Tempat';
+      }
+
+      // Fitur 2: Update Signal Quality Telemetry
+      const accVal = Math.round(data.location.accuracy || 5);
+      const accCard = document.getElementById('cardAccuracyVal');
+      if (accCard) {
+        if (accVal <= 10) {
+          accCard.innerHTML = `<span class="telemetry-status is-live">${AppIcons.get('satellite', { size: 13 })} Presisi (±${accVal}m)</span>`;
+        } else if (accVal <= 35) {
+          accCard.innerHTML = `<span class="telemetry-status is-standby">${AppIcons.get('satellite', { size: 13 })} Baik (±${accVal}m)</span>`;
+        } else {
+          accCard.innerHTML = `<span class="telemetry-status is-offline">${AppIcons.get('satellite', { size: 13 })} Perkiraan (±${accVal}m)</span>`;
+        }
+      }
+
+    }
+
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
+      const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+        Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
+      const θ = Math.atan2(y, x);
+      const brng = (θ * 180 / Math.PI + 360) % 360;
+      return Math.round(brng);
+    }
+
+    function getCompassDirection(deg) {
+      const directions = ['Utara', 'Timur Laut', 'Timur', 'Tenggara', 'Selatan', 'Barat Daya', 'Barat', 'Barat Laut'];
+      return directions[Math.round(deg / 45) % 8];
+    }
+
+    async function resolvePartnerAddress(lat, lng) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`).then(r => r.json());
+        if (res && res.display_name) {
+          const parts = res.display_name.split(', ');
+          const shortAddress = parts.slice(0, 3).join(', ');
+          document.getElementById('partnerAddressLabel').textContent = shortAddress;
+          appState.partnerAddress = shortAddress;
+        }
+      } catch (e) {
+        document.getElementById('partnerAddressLabel').textContent = `Koordinat: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+    }
+
+    function updatePolyline() {
+      if (appState.partnerCoords) {
+        polyline.setLatLngs([
+          [appState.myCoords.latitude, appState.myCoords.longitude],
+          [appState.partnerCoords.latitude, appState.partnerCoords.longitude]
+        ]);
+      }
+    }
+
+    function formatDist(meters) {
+      if (!meters && meters !== 0) return 'Menghubungkan...';
+      if (meters < 1000) return `${Math.round(meters)} m`;
+      return `${(meters / 1000).toFixed(1)} km`;
+    }
+
+    async function loadPartnerTelemetry() {
+      if (!appState.device) return;
+      try {
+        const res = await fetch('/api/location/latest', {
+          headers: { 'X-Device-Token': appState.device.device_token }
+        }).then(r => r.json());
+
+        if (res.partnerDevice && res.partnerDevice.location) {
+          onPartnerLocationUpdate({
+            location: res.partnerDevice.location,
+            distanceToPartner: res.distance,
+            distanceFormatted: res.distanceFormatted,
+            deviceName: res.partnerDevice.name,
+            battery: res.partnerDevice.battery,
+            matchedPlace: res.partnerDevice.place
+          });
+        }
+      } catch (e) { }
+    }
+
+    function focusMe() {
+      triggerHaptic('light');
+      map.flyTo([appState.myCoords.latitude, appState.myCoords.longitude], 17, { duration: 1 });
+    }
+
+    function focusPartner() {
+      triggerHaptic('light');
+      if (appState.partnerCoords) {
+        map.flyTo([appState.partnerCoords.latitude, appState.partnerCoords.longitude], 17, { duration: 1 });
+      } else {
+        showToast('Belum ada data lokasi pasangan. Hubungkan via menu Pair.');
+      }
+    }
+
+    function fitBoth() {
+      triggerHaptic('light');
+      if (appState.device && !appState.device.partner_device_id) {
+        openPairModal();
+        return;
+      }
+      if (appState.partnerCoords) {
+        const bounds = L.latLngBounds([
+          [appState.myCoords.latitude, appState.myCoords.longitude],
+          [appState.partnerCoords.latitude, appState.partnerCoords.longitude]
+        ]);
+        map.fitBounds(bounds, { padding: [80, 80], maxZoom: 17 });
+      } else {
+        focusMe();
+      }
+    }
+
+    function navigateToPartner() {
+      triggerHaptic('light');
+      if (appState.partnerCoords) {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${appState.partnerCoords.latitude},${appState.partnerCoords.longitude}`;
+        window.open(url, '_blank');
+      } else {
+        showToast('Lokasi pasangan belum tersedia.');
+      }
+    }
+
+    function shareLiveTrackingWhatsApp() {
+      triggerHaptic('light');
+      const code = document.getElementById('myPairPinDisplay').textContent;
+      const shareUrl = `${window.location.origin}/?pair=${code}`;
+      const text = encodeURIComponent(
+        `Hai! Buka link ini untuk memantau posisiku secara realtime tanpa batas jarak:\n${shareUrl}\n\nKode Pairing: ${code}`
+      );
+      window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+    }
+
+    async function generatePairingCode() {
+      if (!appState.user) return;
+      try {
+        const res = await fetch('/api/device/generate-code', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${appState.user.token}` }
+        }).then(r => r.json());
+
+        const code = res.code || '------';
+        document.getElementById('myPairPinDisplay').textContent = code;
+
+        // Render QR Code untuk Scan HP 1-Tap
+        const qrContainer = document.getElementById('pairingQrContainer');
+        qrContainer.innerHTML = '';
+        if (typeof QRCode !== 'undefined') {
+          const directPairLink = `${window.location.origin}/?pair=${code}`;
+          new QRCode(qrContainer, {
+            text: directPairLink,
+            width: 140,
+            height: 140,
+            colorDark: getComputedStyle(document.documentElement).getPropertyValue('--ink-primary').trim() || '#1F1D1A',
+            colorLight: "#FFFFFF",
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
+      } catch (e) { }
+    }
+
+    function copyPairCode() {
+      triggerHaptic('light');
+      const code = document.getElementById('myPairPinDisplay').textContent;
+      navigator.clipboard.writeText(code);
+      showToast(`Kode ${code} disalin ke clipboard!`);
+    }
+
+    function copyPartnerCoords() {
+      triggerHaptic('light');
+      if (!appState.partnerCoords) {
+        showToast('Koordinat pasangan belum tersedia');
+        return;
+      }
+      const text = document.getElementById('cardCoordsVal').textContent.trim();
+      navigator.clipboard.writeText(text);
+      showToast(`Koordinat ${text} berhasil disalin!`);
+    }
+
+    async function submitPairCode() {
+      const code = document.getElementById('inputPartnerCode').value.trim().toUpperCase();
+      if (!code || code.length !== 6) return showToast('Masukkan 6 karakter kode pairing');
+
+      try {
+        const res = await fetch('/api/device/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${appState.user.token}` },
+          body: JSON.stringify({ code })
+        }).then(r => r.json());
+
+        if (res.error) throw new Error(res.error);
+
+        triggerHaptic('success');
+        showToast('Sukses! Perangkat terhubung dengan pasangan.');
+        closeModal('pairingModal');
+        loadPartnerTelemetry();
+      } catch (err) {
+        showToast('Gagal: ' + err.message);
+      }
+    }
+
+    function checkAutoPairParam() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const pairParam = urlParams.get('pair');
+      if (pairParam && pairParam.length === 6) {
+        setTimeout(() => {
+          if (confirm(`Pasangan Anda membagikan kode pairing: ${pairParam.toUpperCase()}.\nHubungkan sekarang?`)) {
+            document.getElementById('inputPartnerCode').value = pairParam.toUpperCase();
+            openPairModal();
+            submitPairCode();
+          }
+        }, 1200);
+      }
+    }
+
+    function triggerHaptic(type = 'light') {
+      if (navigator.vibrate) {
+        if (type === 'light') navigator.vibrate(20);
+        else if (type === 'success') navigator.vibrate([30, 50, 30]);
+        else if (type === 'heart') navigator.vibrate([120, 60, 120, 60, 180]);
+        else if (type === 'alert') navigator.vibrate([80, 40, 80]);
+      }
+    }
+
+    
+    function updateConnectionStateHUD() {
+      const hud = document.querySelector('.distance-floating-hud');
+      const distEl = document.getElementById('floatingDistanceText');
+      const compassEl = document.getElementById('floatingCompassBearing');
+      if (!hud || !distEl) return;
+
+      hud.classList.remove('state-unpaired', 'state-connecting', 'state-connected', 'state-offline');
+
+      // State 3: Belum dipasangkan
+      if (appState.device && !appState.device.partner_device_id) {
+        hud.classList.add('state-unpaired');
+        distEl.innerHTML = '<span class="dist-action-prompt">+ Hubungkan Pasangan</span>';
+        if (compassEl) compassEl.textContent = 'Ketuk untuk menyambungkan HP';
+        return;
+      }
+
+      // State 1: Menghubungkan (awal)
+      if (!appState.partnerCoords) {
+        hud.classList.add('state-connecting');
+        distEl.innerHTML = '<span class="dist-connecting-spinner"></span><span>Menghubungkan…</span>';
+        if (compassEl) compassEl.textContent = 'Menunggu sinyal GPS pasangan…';
+        return;
+      }
+
+      // Cek apakah pasangan offline (> 120 detik)
+      const diffSec = appState.lastPartnerUpdate ? Math.round((Date.now() - appState.lastPartnerUpdate) / 1000) : 9999;
+      if (diffSec > 120) {
+        // State 4: Pasangan offline
+        hud.classList.add('state-offline');
+        distEl.textContent = formatDist(appState.distanceMeters);
+        const mins = Math.max(1, Math.round(diffSec / 60));
+        if (compassEl) compassEl.innerHTML = `<span class="empty-state-text">Terakhir aktif ${mins}m lalu</span>`;
+      } else {
+        // State 2: Terhubung live
+        hud.classList.add('state-connected');
+        distEl.textContent = formatDist(appState.distanceMeters);
+      }
+    }
+
+    function startTickerInterval() {
+      setInterval(() => {
+        if (appState.lastPartnerUpdate) {
+          const diffSec = Math.round((new Date() - appState.lastPartnerUpdate) / 1000);
+          const tickerEl = document.getElementById('partnerLastSeenTicker');
+          if (tickerEl) {
+            if (diffSec < 60) {
+              tickerEl.innerHTML = '<span class="ticker-dot live"></span>Baru saja';
+            } else if (diffSec < 3600) {
+              tickerEl.innerHTML = `<span class="ticker-dot standby"></span>${Math.round(diffSec / 60)}m lalu`;
+            } else {
+              tickerEl.innerHTML = `<span class="ticker-dot offline"></span>${Math.round(diffSec / 3600)}j lalu`;
+            }
+          }
+        }
+      }, 1000);
+    }
+
+    function checkPwaDisplay() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      if (!isStandalone) {
+        document.getElementById('pwaBanner').classList.add('active');
+      }
+    }
+
+    function showPwaInstructions() {
+      document.getElementById('pwaGuideModal').classList.add('active');
+    }
+
+    function closePwaBanner() {
+      document.getElementById('pwaBanner').classList.remove('active');
+    }
+
+    
+    let lastFocusedElement = null;
+
+    function openPairModal() {
+      triggerHaptic('light');
+      generatePairingCode();
+      openModalWithFocus('pairingModal');
+    }
+
+    function openSettingsModal() {
+      triggerHaptic('light');
+      openModalWithFocus('settingsModal');
+    }
+
+    function openHistoryModal() {
+      triggerHaptic('light');
+      openModalWithFocus('historyModal');
+      loadHistoryPoints();
+      loadDailySummary(activeHistoryTarget);
+    }
+
+    function selectHistoryTarget(target) {
+      triggerHaptic('light');
+      activeHistoryTarget = target;
+      const btnPartner = document.getElementById('histTargetPartner');
+      const btnMe = document.getElementById('histTargetMe');
+      if (btnPartner) {
+        btnPartner.classList.toggle('is-active', target === 'partner');
+        btnPartner.setAttribute('aria-selected', target === 'partner' ? 'true' : 'false');
+      }
+      if (btnMe) {
+        btnMe.classList.toggle('is-active', target === 'me');
+        btnMe.setAttribute('aria-selected', target === 'me' ? 'true' : 'false');
+      }
+      loadHistoryPoints();
+      loadDailySummary(activeHistoryTarget);
+    }
+
+    async function loadHistoryPoints() {
+      const listEl = document.getElementById('historyPointsList');
+      const countEl = document.getElementById('histPointCount');
+      listEl.innerHTML = '<div class="history-empty-message">Mengambil data...</div>';
+
+      if (!appState.device) {
+        listEl.innerHTML = '<div class="history-empty-message">Perangkat belum terhubung.</div>';
+        return;
+      }
+
+      try {
+        const queryTarget = activeHistoryTarget === 'partner' ? 'partner' : 'me';
+        const res = await fetch(`/api/location/history?target=${queryTarget}&limit=40`, {
+          headers: { 'X-Device-Token': appState.device.device_token }
+        }).then(r => r.json());
+
+        currentHistoryData = res.locations || [];
+        countEl.textContent = `${currentHistoryData.length} Titik`;
+
+        if (currentHistoryData.length === 0) {
+          listEl.innerHTML = '<div class="history-empty-message">Belum ada riwayat jejak tersimpan.</div>';
+          return;
+        }
+
+        listEl.innerHTML = currentHistoryData.map((pt, idx) => {
+          const time = new Date(pt.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const speed = Math.round((pt.speed || 0) * 3.6);
+          return `
+            <div class="history-item-row">
+              <div class="history-item-left">
+                <span class="history-idx">#${currentHistoryData.length - idx}</span>
+                <span class="history-time">${time}</span>
+                <span class="history-coords">(${pt.latitude.toFixed(4)}, ${pt.longitude.toFixed(4)})</span>
+              </div>
+              <span class="history-speed ${speed > 0 ? 'is-live' : 'is-offline'}">${speed > 0 ? speed + ' km/h' : 'Diam'}</span>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        listEl.innerHTML = `<div class="history-empty-message error">Gagal memuat: ${err.message}</div>`;
+      }
+    }
+
+    function loadAndRenderHistoryTrail() {
+      if (!currentHistoryData || currentHistoryData.length === 0) {
+        showToast('Tidak ada titik riwayat untuk ditampilkan.');
+        return;
+      }
+
+      clearHistoryTrail();
+
+      // Urutkan dari rekaman terlama ke terbaru untuk garis kronologis
+      const sorted = [...currentHistoryData].reverse();
+      const latlngs = sorted.map(pt => [pt.latitude, pt.longitude]);
+
+      const isPartner = activeHistoryTarget === 'partner';
+      const trailColor = isPartner 
+        ? (getComputedStyle(document.documentElement).getPropertyValue('--accent-terracotta').trim() || '#BF5129')
+        : (getComputedStyle(document.documentElement).getPropertyValue('--ink-secondary').trim() || '#423E37');
+
+      // 1. Gambar Polyline Jejak
+      const trailPolyline = L.polyline(latlngs, {
+        color: trailColor,
+        weight: 3,
+        dashArray: '4, 6',
+        opacity: 0.9
+      });
+      historyLayerGroup.addLayer(trailPolyline);
+
+      // 2. Tambah marker titik awal (Start) & titik akhir (End)
+      const startPt = latlngs[0];
+      const endPt = latlngs[latlngs.length - 1];
+
+      const startIcon = L.divIcon({
+        className: 'custom-trail-marker',
+        html: '<div class="trail-marker-dot start"></div>',
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+      });
+      const endIcon = L.divIcon({
+        className: 'custom-trail-marker',
+        html: '<div class="trail-marker-dot end"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+
+      const startMarker = L.marker(startPt, { icon: startIcon }).bindTooltip('Titik Awal Jejak');
+      const endMarker = L.marker(endPt, { icon: endIcon }).bindTooltip('Posisi Terakhir Jejak');
+      historyLayerGroup.addLayer(startMarker);
+      historyLayerGroup.addLayer(endMarker);
+
+      // 3. Zoom otomatis agar seluruh jejak terlihat pas di layar HP
+      map.fitBounds(trailPolyline.getBounds(), { padding: [50, 50] });
+
+      closeModal('historyModal');
+      triggerHaptic('success');
+    }
+
+    function clearHistoryTrail() {
+      if (historyLayerGroup) {
+        historyLayerGroup.clearLayers();
+      }
+    }
+
+    function openNavigationModal() {
+      triggerHaptic('light');
+      if (!appState.partnerCoords) {
+        showToast('Lokasi pasangan belum tersedia. Menunggu GPS pasangan…', 'alert');
+        return;
+      }
+      openModalWithFocus('navigationModal');
+    }
+
+    function openPlacesModal() {
+      triggerHaptic('light');
+      openModalWithFocus('placesModal');
+      loadSavedPlaces();
+    }
+
+    function showPwaInstructions() {
+      openModalWithFocus('pwaGuideModal');
+    }
+
+    function openModalWithFocus(id) {
+      lastFocusedElement = document.activeElement;
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.add('active');
+
+      const focusables = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusables.length > 0) {
+        setTimeout(() => focusables[0].focus(), 50);
+      }
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove('active');
+      }
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+      }
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 200);
+    }
+
+
+    function resetProfile() {
+      if (confirm('Keluar dan reset profil perangkat ini?')) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+
+    // ===== FITUR 1: NAVIGASI CEPAT (GOOGLE MAPS & WAZE) =====
+    function openNavigationModal() {
+      triggerHaptic('light');
+      if (!appState.partnerCoords) {
+        showToast('Lokasi pasangan belum tersedia. Menunggu GPS pasangan...');
+        return;
+      }
+      document.getElementById('navigationModal').classList.add('active');
+    }
+
+    function openDirectGoogleMaps() {
+      triggerHaptic('light');
+      if (appState.partnerCoords) {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${appState.partnerCoords.latitude},${appState.partnerCoords.longitude}`;
+        window.open(url, '_blank');
+        closeModal('navigationModal');
+      }
+    }
+
+    function openDirectWaze() {
+      triggerHaptic('light');
+      if (appState.partnerCoords) {
+        const url = `https://waze.com/ul?ll=${appState.partnerCoords.latitude},${appState.partnerCoords.longitude}&navigate=yes`;
+        window.open(url, '_blank');
+        closeModal('navigationModal');
+      }
+    }
+
+    function copyPartnerCoordsModal() {
+      copyPartnerCoords();
+      closeModal('navigationModal');
+    }
+
+    // ===== FITUR 3: PING CINTA / HAPTIC POKE (GETAR LEMBUT & REAKSI CEPAT) =====
+    function sendLovePoke(type = 'heart') {
+      triggerHaptic('light');
+      spawnFloatingHearts(4);
+      if (appState.ws && appState.ws.readyState === WebSocket.OPEN) {
+        appState.ws.send(JSON.stringify({
+          event: 'send_poke',
+          data: { type }
+        }));
+      }
+      showToast('Sapaan getaran terkirim ke pasangan!', 'heart');
+    }
+
+    function onPartnerPokeReceived(data) {
+      triggerHaptic('heart');
+      spawnFloatingHearts(6);
+      const name = data.senderName || 'Pasangan Anda';
+      showToast(`${name} menyapa Anda!`, 'heart');
+    }
+
+    function spawnFloatingHearts(count = 4) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+      }
+      for (let i = 0; i < count; i++) {
+        const heart = document.createElement('div');
+        heart.className = 'floating-heart';
+        heart.innerHTML = AppIcons.get('heart', { size: 24 });
+        heart.style.left = `${Math.random() * 70 + 15}vw`;
+        heart.style.animationDelay = `${i * 0.15}s`;
+        document.body.appendChild(heart);
+        setTimeout(() => heart.remove(), 2400);
+      }
+    }
+
+    function showToast(msg, icon = null) {
+      let toast = document.getElementById('appToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'appToast';
+        toast.className = 'app-toast';
+        document.body.appendChild(toast);
+      }
+      const iconMarkup = icon ? AppIcons.get(icon, { size: 16 }) : '';
+      toast.innerHTML = `${iconMarkup}<span>${msg}</span>`;
+      toast.classList.add('active');
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => toast.classList.remove('active'), 3200);
+    }
+
+    // ===== FITUR 4: ADAPTIVE GPS (SMART POWER SAVER) =====
+    function evaluateAdaptiveGps(pos) {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const speedKmH = (pos.coords.speed || 0) * 3.6;
+      const now = Date.now();
+
+      if (!appState.gpsSamples) appState.gpsSamples = [];
+      appState.gpsSamples.push({ lat, lng, speed: speedKmH, time: now });
+      if (appState.gpsSamples.length > 5) appState.gpsSamples.shift();
+
+      if (appState.gpsSamples.length >= 3) {
+        const first = appState.gpsSamples[0];
+        const distMoved = calculateSimpleDistance(first.lat, first.lng, lat, lng);
+        const maxSpeed = Math.max(...appState.gpsSamples.map(s => s.speed));
+
+        // Jika diam (kecepatan < 1.2 km/h dan pergeseran < 15m)
+        if (maxSpeed < 1.2 && distMoved < 15) {
+          if (!appState.stationarySince) appState.stationarySince = now;
+          const stationarySeconds = (now - appState.stationarySince) / 1000;
+
+          // Diam lebih dari 90 detik -> Masuki Mode Hemat Daya 45 detik
+          if (stationarySeconds >= 90 && appState.currentGpsInterval !== 45000) {
+            updateGpsLoopInterval(45000);
+            updateGpsModePill('hemat');
+          }
+        } else {
+          // Bergerak! Segera kembalikan ke mode responsif 10 detik
+          appState.stationarySince = null;
+          if (appState.currentGpsInterval !== 10000) {
+            updateGpsLoopInterval(10000);
+            updateGpsModePill('aktif');
+          }
+        }
+      }
+    }
+
+    function calculateSimpleDistance(lat1, lon1, lat2, lon2) {
+      const dLat = (lat2 - lat1) * 111320;
+      const dLon = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
+      return Math.sqrt(dLat * dLat + dLon * dLon);
+    }
+
+    function updateGpsLoopInterval(ms) {
+      appState.currentGpsInterval = ms;
+      if (appState.gpsIntervalId) clearInterval(appState.gpsIntervalId);
+      appState.gpsIntervalId = setInterval(transmitLocation, ms);
+    }
+
+    function updateGpsModePill(mode) {
+      const pill = document.getElementById('pillGpsMode');
+      if (!pill) return;
+      if (mode === 'hemat') {
+        pill.innerHTML = `${AppIcons.get('lightning', { size: 13 })} <span>Siaga (45s)</span>`;
+        pill.className = 'pill-badge status-standby';
+        pill.title = 'Mode Hemat Daya Aktif (Perangkat sedang diam)';
+      } else {
+        pill.innerHTML = `${AppIcons.get('lightning', { size: 13 })} <span>10s Aktif</span>`;
+        pill.className = 'pill-badge status-live';
+        pill.title = 'Mode Pelacakan Realtime 10 Detik';
+      }
+    }
+
+    // ===== FITUR 5: TEMPAT FAVORIT & GEOFENCING =====
+    function openPlacesModal() {
+      triggerHaptic('light');
+      document.getElementById('placesModal').classList.add('active');
+      loadSavedPlaces();
+    }
+
+    function setPlaceSource(source) {
+      triggerHaptic('light');
+      appState.selectedPlaceSource = source;
+      document.getElementById('btnPlaceSourcePartner').classList.toggle('is-active', source === 'partner');
+      document.getElementById('btnPlaceSourceMe').classList.toggle('is-active', source === 'me');
+    }
+
+    async function loadSavedPlaces() {
+      const listEl = document.getElementById('savedPlacesList');
+      const countEl = document.getElementById('savedPlacesCount');
+      listEl.innerHTML = '<div class="history-empty-message">Memuat data tempat...</div>';
+
+      if (!appState.device) return;
+
+      try {
+        const res = await fetch('/api/places', {
+          headers: { 'X-Device-Token': appState.device.device_token }
+        }).then(r => r.json());
+
+        const places = res.places || [];
+        countEl.textContent = `${places.length} Tempat`;
+
+        if (places.length === 0) {
+          listEl.innerHTML = '<div class="history-empty-message">Belum ada tempat favorit tersimpan.</div>';
+          return;
+        }
+
+        listEl.innerHTML = places.map(p => `
+          <div class="saved-place-item">
+            <div>
+              <div class="saved-place-name">
+                <app-icon name="home" size="14"></app-icon> <span>${p.name}</span>
+              </div>
+              <div class="saved-place-meta">
+                Radius ${p.radius_meters}m • (${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)})
+              </div>
+            </div>
+            <button onclick="deletePlace(${p.id})" class="btn-delete-place" title="Hapus tempat" aria-label="Hapus tempat ${p.name}">
+              <app-icon name="trash" size="14"></app-icon>
+            </button>
+          </div>
+        `).join('');
+      } catch (err) {
+        listEl.innerHTML = `<div class="history-empty-message error">Gagal: ${err.message}</div>`;
+      }
+    }
+
+    async function saveNewPlace() {
+      const nameInput = document.getElementById('newPlaceNameInput');
+      const name = nameInput.value.trim();
+      if (!name) {
+        showToast('Harap masukkan nama tempat.');
+        return;
+      }
+
+      let targetCoords = appState.selectedPlaceSource === 'partner' ? appState.partnerCoords : appState.myCoords;
+      if (!targetCoords) {
+        showToast('Koordinat belum tersedia. Pastikan sinyal GPS aktif.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/places', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-Token': appState.device.device_token
+          },
+          body: JSON.stringify({
+            name,
+            latitude: targetCoords.latitude,
+            longitude: targetCoords.longitude,
+            radiusMeters: 100,
+            icon: 'home'
+          })
+        }).then(r => r.json());
+
+        if (res.place) {
+          triggerHaptic('success');
+          showToast(`Tempat "${name}" berhasil disimpan!`, 'check');
+          nameInput.value = '';
+          loadSavedPlaces();
+        } else {
+          showToast(res.error || 'Gagal menyimpan tempat');
+        }
+      } catch (err) {
+        showToast('Terjadi kesalahan: ' + err.message);
+      }
+    }
+
+    async function deletePlace(id) {
+      if (!confirm('Hapus tempat favorit ini?')) return;
+      try {
+        await fetch(`/api/places/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-Device-Token': appState.device.device_token }
+        });
+        triggerHaptic('light');
+        loadSavedPlaces();
+        showToast('Tempat berhasil dihapus');
+      } catch (err) {
+        showToast('Gagal menghapus: ' + err.message);
+      }
+    }
+
+    // ===== FITUR 6: RINGKASAN PERJALANAN HARI INI =====
+    async function loadDailySummary(target = 'partner') {
+      const distEl = document.getElementById('summaryDailyDist');
+      const timeEl = document.getElementById('summaryDailyTime');
+      const ptsEl = document.getElementById('summaryDailyPoints');
+
+      if (!appState.device) return;
+
+      try {
+        const res = await fetch(`/api/location/daily-summary?target=${target}`, {
+          headers: { 'X-Device-Token': appState.device.device_token }
+        }).then(r => r.json());
+
+        if (res && res.summary) {
+          distEl.textContent = res.summary.totalDistanceFormatted || '0 m';
+          timeEl.textContent = `${res.summary.activeMinutes} mnt`;
+          ptsEl.textContent = `${res.summary.pointsCount} titik`;
+        }
+      } catch (e) {
+        distEl.textContent = '-';
+        timeEl.textContent = '-';
+        ptsEl.textContent = '-';
+      }
+    }
+
+    // ===== OPTIMASI: SCREEN WAKE LOCK & VISIBILITY SAVER =====
+    let wakeLock = null;
+    async function initWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (e) {}
+
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && 'wakeLock' in navigator) {
+          try {
+            wakeLock = await navigator.wakeLock.request('screen');
+          } catch (e) {}
+          if (map) map.invalidateSize();
+        }
+      });
+    }
+  
+    // Aksesibilitas: Tutup modal aktif dengan tombol Escape (Esc)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        const activeModal = document.querySelector('.modal-overlay.active');
+        if (activeModal && activeModal.id) {
+          closeModal(activeModal.id);
+        }
+      }
+    });
+
+  </script>
+</body>
+
+</html>

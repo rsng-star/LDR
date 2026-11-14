@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Tanpilan: Dual Device Real-Time Tracking (Posisi Nyata)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="assets/icons.js"></script>
+  <style>
+    app-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    app-icon svg {
+      vertical-align: middle;
+      display: inline-block;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+    .status-dot.green {
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+
+    :root {
+      --bg-dark: #090D16;
+      --card-bg: #131B2E;
+      --border-color: #243049;
+      --primary: #38BDF8;
+      --accent-lili: #3B82F6;
+      --accent-rudi: #EC4899;
+      --danger: #EF4444;
+      --success: #10B981;
+      --warning: #F59E0B;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      font-size: 28px;
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-badges {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #1E293B;
+      border: 1px solid var(--border-color);
+    }
+
+    .badge.gps-active {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34D399;
+      border-color: #10B981;
+    }
+
+    .badge.global {
+      background: rgba(14, 165, 233, 0.15);
+      color: #38BDF8;
+      border-color: #0284C7;
+    }
+
+    /* Simulation Control Toolbar */
+    .controls-bar {
+      background: #0F172A;
+      padding: 12px 28px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .toolbar-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #94A3B8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      background: #1E293B;
+      color: var(--text);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background: #334155;
+      border-color: var(--primary);
+    }
+
+    button.btn-real-gps {
+      background: #059669;
+      color: #fff;
+      border-color: #34D399;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+      animation: pulse-green 2s infinite;
+    }
+
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+      50% { box-shadow: 0 0 18px rgba(16, 185, 129, 0.8); }
+    }
+
+    button.primary {
+      background: #0284C7;
+      color: #fff;
+      border-color: #38BDF8;
+    }
+
+    button.purple {
+      background: #6D28D9;
+      color: #fff;
+      border-color: #A78BFA;
+    }
+
+    button.scenario-btn {
+      background: #1E293B;
+      border-color: #334155;
+    }
+
+    button.scenario-btn.active {
+      background: #0369A1;
+      border-color: #38BDF8;
+      color: #fff;
+    }
+
+    /* Dual Device Phone Canvas */
+    .phones-canvas {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 30px;
+      padding: 24px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+
+    /* Realistic Phone Shell */
+    .phone-shell {
+      width: 385px;
+      height: 740px;
+      background: #000;
+      border-radius: 46px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 10px #1E293B, 0 0 0 12px #334155;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Notch */
+    .phone-notch {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 24px;
+      background: #000;
+      border-radius: 14px;
+      z-index: 1000;
+    }
+
+    .phone-inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0F172A;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Mobile Header */
+    .m-header {
+      padding: 44px 16px 10px 16px;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 500;
+    }
+
+    .m-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lili-theme .m-title { color: var(--accent-lili); }
+    .rudi-theme .m-title { color: var(--accent-rudi); }
+
+    .m-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Location Bar */
+    .m-loc-bar {
+      background: #0B1120;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 11px;
+      color: #CBD5E1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 450;
+    }
+
+    .area-badge {
+      max-width: 210px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #38BDF8;
+      font-weight: 600;
+    }
+
+    /* Map View inside Mobile */
+    .m-map {
+      flex: 1;
+      width: 100%;
+      z-index: 100;
+    }
+
+    /* Distance Floating Pill */
+    .distance-floating-pill {
+      position: absolute;
+      top: 102px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(19, 27, 46, 0.94);
+      backdrop-filter: blur(8px);
+      padding: 8px 18px;
+      border-radius: 20px;
+      border: 1px solid #38BDF8;
+      z-index: 400;
+      text-align: center;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      min-width: 220px;
+    }
+
+    .pill-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    .pill-val {
+      font-size: 17px;
+      font-weight: 800;
+      color: #38BDF8;
+    }
+
+    .pill-status {
+      font-size: 10px;
+      color: #34D399;
+      font-weight: 600;
+    }
+
+    /* Map Float Controls */
+    .map-float-btn {
+      position: absolute;
+      right: 12px;
+      bottom: 140px;
+      background: rgba(19, 27, 46, 0.9);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      z-index: 400;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+
+    .map-float-btn:hover {
+      background: #0284C7;
+    }
+
+    /* Bottom Info Card inside Mobile */
+    .m-bottom-card {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border-color);
+      padding: 14px 16px;
+      z-index: 500;
+    }
+
+    .partner-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .partner-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      background: #1E293B;
+    }
+
+    .partner-name {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .partner-loc-text {
+      font-size: 11px;
+      color: #38BDF8;
+      font-weight: 500;
+      margin-top: 1px;
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .partner-meta {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .m-btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .m-btn {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      background: #1E293B;
+      color: var(--text);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+    }
+
+    .m-btn:hover {
+      background: #334155;
+    }
+
+    /* Console Logger Footer */
+    .event-console {
+      background: #0B0F19;
+      border-top: 1px solid var(--border-color);
+      padding: 14px 28px;
+      height: 130px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 11px;
+    }
+
+    .log-line {
+      margin-bottom: 4px;
+      color: var(--text-muted);
+    }
+
+    .log-line.highlight { color: #38BDF8; }
+    .log-line.success { color: #34D399; }
+    .log-line.gps { color: #10B981; font-weight: bold; }
+
+    /* Custom Leaflet Pulse Marker */
+    .pulse-marker {
+      display: block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 0 12px rgba(0,0,0,0.6);
+    }
+
+    .pulse-lili { background: #3B82F6; }
+    .pulse-rudi { background: #EC4899; }
+
+    .sim-floating-heart {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 32px;
+      pointer-events: none;
+      animation: simHeartUp 2s ease-out forwards;
+      z-index: 999;
+      filter: drop-shadow(0 2px 8px rgba(244,63,94,0.6));
+    }
+    @keyframes simHeartUp {
+      0% { transform: translateX(-50%) translateY(0) scale(0.6); opacity: 0; }
+      20% { opacity: 1; transform: translateX(-50%) translateY(-30px) scale(1.3); }
+      100% { transform: translateX(-50%) translateY(-190px) scale(0.9); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Global Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo"><app-icon name="pin" size="24" color="#38BDF8"></app-icon></div>
+      <div>
+        <div class="brand-title">Aplikasi Tanpilan: Pelacakan Dua Device (Posisi Nyata)</div>
+        <div class="brand-sub">Mendeteksi koordinat GPS asli perangkat Anda dan pasangan secara realtime</div>
+      </div>
+    </div>
+    <div class="status-badges">
+      <button class="primary" style="background:#059669; border-color:#34D399; font-weight:700; padding:8px 16px; gap:6px; display:inline-flex; align-items:center;" onclick="openQrModal()">
+        <app-icon name="phone" size="16"></app-icon> BUKA DI HP ANDA (SCAN QR)
+      </button>
+      <div id="gpsStatusBadge" class="badge gps-active"><app-icon name="satellite" size="14" style="margin-right:4px;"></app-icon> GPS Sensor: Mendeteksi Lokasi Anda...</div>
+      <div class="badge global"><app-icon name="globe" size="14" style="margin-right:4px;"></app-icon> Jangkauan: Tanpa Batas Jarak</div>
+      <div class="badge"><app-icon name="refresh" size="14" style="margin-right:4px;"></app-icon> Mode: Pembaruan Otomatis (10 Detik)</div>
+    </div>
+  </header>
+
+  <!-- Controls Bar: Deteksi GPS Nyata & Skenario Jarak -->
+  <div class="controls-bar">
+    <div class="controls-row">
+      <span class="toolbar-label"><app-icon name="pin" size="14" style="margin-right:4px;"></app-icon> Lokasi GPS:</span>
+      <div class="btn-group">
+        <button class="btn-real-gps" onclick="detectRealGPS()">
+          <app-icon name="crosshair" size="14" style="margin-right:6px;"></app-icon> AMBIL POSISI GPS ASLI SAYA SEKARANG
+        </button>
+        <button class="scenario-btn" onclick="setScenario('bandung')">
+          <app-icon name="train" size="14" style="margin-right:6px;"></app-icon> Skenario Beda Kota: Jkt - Bdg (~122 km)
+        </button>
+        <button class="scenario-btn" onclick="setScenario('airport')">
+          <app-icon name="plane" size="14" style="margin-right:6px;"></app-icon> Skenario Bandara (~26 km)
+        </button>
+        <button class="scenario-btn" onclick="setScenario('monas')">
+          <app-icon name="landmark" size="14" style="margin-right:6px;"></app-icon> Skenario Monas Jakarta (~150 m)
+        </button>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <span class="toolbar-label"><app-icon name="settings" size="14" style="margin-right:4px;"></app-icon> Kontrol Simulasi & Pairing:</span>
+      <div class="btn-group">
+        <button class="primary" onclick="triggerAutoPair()"><app-icon name="bolt" size="14" style="margin-right:6px;"></app-icon> Pasangkan Perangkat (Pairing)</button>
+        <button id="toggleLoopBtn" onclick="toggle10sLoop()"><app-icon name="refresh" size="14" style="margin-right:6px;"></app-icon> Mulai Kirim GPS Otomatis (Tiap 10s)</button>
+        <button class="purple" onclick="fitBothMaps()"><app-icon name="crosshair" size="14" style="margin-right:6px;"></app-icon> Tampilkan Kedua Perangkat di Peta</button>
+        <button onclick="clearLogs()"><app-icon name="trash" size="14" style="margin-right:6px;"></app-icon> Bersihkan Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dual Device Phone Canvas -->
+  <div class="phones-canvas">
+
+    <!-- DEVICE 1: WANITA (Perangkat 1) -->
+    <div class="phone-shell lili-theme">
+      <div class="phone-notch"></div>
+      <div class="phone-inner">
+        <!-- Header -->
+        <div class="m-header">
+          <div>
+            <div class="m-title"><app-icon name="woman" size="18" color="#3B82F6" style="margin-right:6px;"></app-icon> Wanita (Perangkat #1)</div>
+            <div class="m-sub">iPhone 15 Pro • Baterai 96%</div>
+          </div>
+          <span style="font-size: 11px; color: var(--success); font-weight: 600;">● Online (GPS)</span>
+        </div>
+
+        <!-- Location Bar -->
+        <div class="m-loc-bar">
+          <span class="area-badge" id="liliCurrentArea"><app-icon name="pin" size="12" style="margin-right:4px;"></app-icon> Mendeteksi lokasi asli...</span>
+          <span style="color:#34D399; font-size:10px;">● GPS Hardware</span>
+        </div>
+
+        <!-- Distance Floating Indicator -->
+        <div id="liliDistancePill" class="distance-floating-pill">
+          <div class="pill-label">JARAK REAL-TIME KE PRIA</div>
+          <div id="liliDistanceVal" class="pill-val">-- km</div>
+          <div id="liliDistanceStatus" class="pill-status">Saling terhubung tanpa batas jarak</div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="mapLili" class="m-map"></div>
+
+        <!-- Floating focus button -->
+        <button class="map-float-btn" onclick="focusPartner('lili')"><app-icon name="crosshair" size="13" style="margin-right:4px;"></app-icon> Ke Lokasi Pria</button>
+
+        <!-- Bottom Status Card -->
+        <div class="m-bottom-card">
+          <div class="partner-row">
+            <div class="partner-info">
+              <div class="avatar"><app-icon name="man" size="24" color="#38BDF8"></app-icon></div>
+              <div>
+                <div class="partner-name">Pria (Perangkat #2)</div>
+                <div class="partner-loc-text" id="liliPartnerLocText">Pria: Menghubungkan...</div>
+                <div class="partner-meta" id="liliPartnerMeta"><span class="status-dot green"></span> Realtime • <app-icon name="battery" size="12"></app-icon> 89%</div>
+              </div>
+            </div>
+            <span style="font-size: 11px; color: #38BDF8; font-weight: bold;" id="liliCountdown">10s</span>
+          </div>
+          <div class="m-btn-row">
+            <button class="m-btn" style="background:rgba(236,72,153,0.2); color:#EC4899; border:1px solid rgba(236,72,153,0.5);" onclick="simulatorSendPoke('lili')"><app-icon name="heart" size="12" style="margin-right:4px;"></app-icon> Ping Sayang ❤️</button>
+            <button class="m-btn" onclick="focusMe('lili')"><app-icon name="pin" size="12" style="margin-right:4px;"></app-icon> Posisi Saya</button>
+            <button class="m-btn" onclick="focusPartner('lili')"><app-icon name="search" size="12" style="margin-right:4px;"></app-icon> Posisi Pria</button>
+            <button class="m-btn" onclick="fitBothMaps()"><app-icon name="map" size="12" style="margin-right:4px;"></app-icon> Keduanya</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEVICE 2: PRIA (Perangkat 2) -->
+    <div class="phone-shell rudi-theme">
+      <div class="phone-notch"></div>
+      <div class="phone-inner">
+        <!-- Header -->
+        <div class="m-header">
+          <div>
+            <div class="m-title"><app-icon name="man" size="18" color="#EC4899" style="margin-right:6px;"></app-icon> Pria (Perangkat #2)</div>
+            <div class="m-sub">Samsung Galaxy S24 • Baterai 89%</div>
+          </div>
+          <span style="font-size: 11px; color: var(--success); font-weight: 600;">● Online (GPS)</span>
+        </div>
+
+        <!-- Location Bar -->
+        <div class="m-loc-bar">
+          <span class="area-badge" id="rudiCurrentArea"><app-icon name="pin" size="12" style="margin-right:4px;"></app-icon> Posisi Pria</span>
+          <span style="color:#34D399; font-size:10px;">● GPS Hardware</span>
+        </div>
+
+        <!-- Distance Floating Indicator -->
+        <div id="rudiDistancePill" class="distance-floating-pill">
+          <div class="pill-label">JARAK REAL-TIME KE WANITA</div>
+          <div id="rudiDistanceVal" class="pill-val">-- km</div>
+          <div id="rudiDistanceStatus" class="pill-status">Saling terhubung tanpa batas jarak</div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="mapRudi" class="m-map"></div>
+
+        <!-- Floating focus button -->
+        <button class="map-float-btn" onclick="focusPartner('rudi')"><app-icon name="crosshair" size="13" style="margin-right:4px;"></app-icon> Ke Lokasi Wanita</button>
+
+        <!-- Bottom Status Card -->
+        <div class="m-bottom-card">
+          <div class="partner-row">
+            <div class="partner-info">
+              <div class="avatar"><app-icon name="woman" size="24" color="#F43F5E"></app-icon></div>
+              <div>
+                <div class="partner-name">Wanita (Perangkat #1)</div>
+                <div class="partner-loc-text" id="rudiPartnerLocText">Wanita: Menghubungkan...</div>
+                <div class="partner-meta" id="rudiPartnerMeta"><span class="status-dot green"></span> Realtime • <app-icon name="battery" size="12"></app-icon> 96%</div>
+              </div>
+            </div>
+            <span style="font-size: 11px; color: #EC4899; font-weight: bold;" id="rudiCountdown">10s</span>
+          </div>
+          <div class="m-btn-row">
+            <button class="m-btn" style="background:rgba(56,189,248,0.2); color:#38BDF8; border:1px solid rgba(56,189,248,0.5);" onclick="simulatorSendPoke('rudi')"><app-icon name="heart" size="12" style="margin-right:4px;"></app-icon> Ping Sayang ❤️</button>
+            <button class="m-btn" onclick="focusMe('rudi')"><app-icon name="pin" size="12" style="margin-right:4px;"></app-icon> Posisi Saya</button>
+            <button class="m-btn" onclick="focusPartner('rudi')"><app-icon name="search" size="12" style="margin-right:4px;"></app-icon> Posisi Wanita</button>
+            <button class="m-btn" onclick="fitBothMaps()"><app-icon name="map" size="12" style="margin-right:4px;"></app-icon> Keduanya</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Realtime Network & Event Console -->
+  <div class="event-console" id="consoleLogs">
+    <div class="log-line gps">[GPS AUTO] Memulai pendeteksian sensor GPS nyata perangkat Anda...</div>
+  </div>
+
+  <script>
+    // State Aplikasi
+    const state = {
+      isRealGpsActive: false,
+      lili: {
+        id: 1,
+        name: 'Perangkat Wanita',
+        token: 'dev_token_lili_sim',
+        lat: -7.8013885,
+        lng: 110.3647176,
+        area: 'Yogyakarta (Lokasi Nyata Anda)',
+        ws: null
+      },
+      rudi: {
+        id: 2,
+        name: 'Perangkat Pria',
+        token: 'dev_token_rudi_sim',
+        lat: -7.799500,
+        lng: 110.366000,
+        area: 'Pria (~240m dari Anda)',
+        ws: null
+      },
+      currentDistance: 0,
+      loopInterval: null,
+      countdown: 10
+    };
+
+    let mapLili, mapRudi;
+    let markerLiliOnLili, markerRudiOnLili, polylineLili;
+    let markerLiliOnRudi, markerRudiOnRudi, polylineRudi;
+
+    function log(msg, type = 'normal') {
+      const consoleEl = document.getElementById('consoleLogs');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = `log-line ${type}`;
+      div.textContent = `[${time}] ${msg}`;
+      consoleEl.appendChild(div);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function initMaps() {
+      mapLili = L.map('mapLili', { zoomControl: false, attributionControl: false }).setView([state.lili.lat, state.lili.lng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapLili);
+
+      mapRudi = L.map('mapRudi', { zoomControl: false, attributionControl: false }).setView([state.rudi.lat, state.rudi.lng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapRudi);
+
+      // Icon markers
+      const iconLili = L.divIcon({ className: 'pulse-marker pulse-lili', iconSize: [20, 20] });
+      const iconRudi = L.divIcon({ className: 'pulse-marker pulse-rudi', iconSize: [20, 20] });
+
+      // Markers di Map Wanita (Posisi Terkunci - Anti Manipulasi)
+      markerLiliOnLili = L.marker([state.lili.lat, state.lili.lng], { icon: iconLili, draggable: false }).addTo(mapLili).bindTooltip('Wanita (Saya) [Terkunci GPS]', { permanent: true, direction: 'top' });
+      markerRudiOnLili = L.marker([state.rudi.lat, state.rudi.lng], { icon: iconRudi, draggable: false }).addTo(mapLili).bindTooltip('Pria (Pasangan) [Terkunci GPS]', { permanent: true, direction: 'bottom' });
+
+      // Markers di Map Pria (Posisi Terkunci - Anti Manipulasi)
+      markerLiliOnRudi = L.marker([state.lili.lat, state.lili.lng], { icon: iconLili, draggable: false }).addTo(mapRudi).bindTooltip('Wanita (Pasangan) [Terkunci GPS]', { permanent: true, direction: 'bottom' });
+      markerRudiOnRudi = L.marker([state.rudi.lat, state.rudi.lng], { icon: iconRudi, draggable: false }).addTo(mapRudi).bindTooltip('Pria (Saya) [Terkunci GPS]', { permanent: true, direction: 'top' });
+
+      // Polylines
+      polylineLili = L.polyline([[state.lili.lat, state.lili.lng], [state.rudi.lat, state.rudi.lng]], { color: '#38BDF8', weight: 3, dashArray: '6, 8' }).addTo(mapLili);
+      polylineRudi = L.polyline([[state.lili.lat, state.lili.lng], [state.rudi.lat, state.rudi.lng]], { color: '#EC4899', weight: 3, dashArray: '6, 8' }).addTo(mapRudi);
+
+      updateDisplay();
+    }
+
+    // Fungsi Deteksi GPS Nyata Browser
+    function detectRealGPS() {
+      if (!navigator.geolocation) {
+        alert('Browser Anda tidak mendukung Geolocation API');
+        return;
+      }
+
+      log('[GPS] Meminta izin akses koordinat GPS asli perangkat Anda...', 'gps');
+      document.getElementById('gpsStatusBadge').innerHTML = `${AppIcons.get('satellite', { size: 14, style: 'margin-right:4px;' })} Membaca GPS Asli...`;
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          state.isRealGpsActive = true;
+          const realLat = position.coords.latitude;
+          const realLng = position.coords.longitude;
+          const accuracy = Math.round(position.coords.accuracy || 10);
+
+          log(`[GPS ASLI DITEMUKAN] Lat: ${realLat.toFixed(6)}, Lng: ${realLng.toFixed(6)} (Akurasi: ${accuracy}m)`, 'gps');
+          document.getElementById('gpsStatusBadge').innerHTML = `${AppIcons.get('satellite', { size: 14, style: 'margin-right:4px;' })} GPS Asli Aktif (${accuracy}m)`;
+
+          // Pasangan diletakkan di sekitar lokasi asli (misal ~180 meter di jalan sebelah)
+          const rudiLat = realLat + 0.0012;
+          const rudiLng = realLng + 0.0010;
+
+          state.lili.lat = realLat;
+          state.lili.lng = realLng;
+          state.lili.area = `Lokasi Nyata Saya (${realLat.toFixed(4)}, ${realLng.toFixed(4)})`;
+
+          state.rudi.lat = rudiLat;
+          state.rudi.lng = rudiLng;
+          state.rudi.area = `Pria (~180m dari Anda)`;
+
+          updatePositions(realLat, realLng, rudiLat, rudiLng);
+          fitBothMaps();
+
+          // Coba reverse geocode nama jalan / kelurahan
+          reverseGeocode(realLat, realLng, 'lili');
+        },
+        (error) => {
+          log(`[INFO] Izin Lokasi belum diberikan / gagal: ${error.message}. Klik "Allow" / "Izinkan" jika browser meminta izin lokasi.`, 'highlight');
+          document.getElementById('gpsStatusBadge').innerHTML = `${AppIcons.get('alert', { size: 14, color: '#F59E0B', style: 'margin-right:4px;' })} Izin GPS Diperlukan`;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    async function reverseGeocode(lat, lng, target) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+          .then(r => r.json());
+        if (res && res.display_name) {
+          const parts = res.display_name.split(', ');
+          const shortAddress = parts.slice(0, 3).join(', ');
+          state[target].area = shortAddress;
+          updateDisplay();
+          log(`[ALAMAT] ${shortAddress}`, 'success');
+        }
+      } catch (e) {}
+    }
+
+    // Skenario Pre-set
+    function setScenario(key) {
+      if (key === 'bandung') {
+        state.lili.lat = -6.175392; state.lili.lng = 106.827153; state.lili.area = 'Monas, Jakarta Pusat';
+        state.rudi.lat = -6.902476; state.rudi.lng = 107.618790; state.rudi.area = 'Gedung Sate, Bandung';
+      } else if (key === 'airport') {
+        state.lili.lat = -6.175392; state.lili.lng = 106.827153; state.lili.area = 'Pusat Kota Jakarta';
+        state.rudi.lat = -6.127500; state.rudi.lng = 106.653700; state.rudi.area = 'Bandara Soekarno-Hatta';
+      } else if (key === 'monas') {
+        state.lili.lat = -6.175392; state.lili.lng = 106.827153; state.lili.area = 'Monas Barat';
+        state.rudi.lat = -6.176400; state.rudi.lng = 106.828000; state.rudi.area = 'Monas Selatan';
+      }
+      updatePositions(state.lili.lat, state.lili.lng, state.rudi.lat, state.rudi.lng);
+      fitBothMaps();
+    }
+
+    // Haversine
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const phi1 = (lat1 * Math.PI) / 180;
+      const phi2 = (lat2 * Math.PI) / 180;
+      const dPhi = ((lat2 - lat1) * Math.PI) / 180;
+      const dLambda = ((lon2 - lon1) * Math.PI) / 180;
+      const a = Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+      return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function formatDistanceFriendly(meters) {
+      if (meters < 1000) return `${meters} meter`;
+      if (meters < 50000) return `${(meters / 1000).toFixed(1)} km`;
+      return `${(meters / 1000).toFixed(0)} km`;
+    }
+
+    function updatePositions(liliLat, liliLng, rudiLat, rudiLng) {
+      state.lili.lat = liliLat;
+      state.lili.lng = liliLng;
+      state.rudi.lat = rudiLat;
+      state.rudi.lng = rudiLng;
+
+      markerLiliOnLili.setLatLng([liliLat, liliLng]);
+      markerRudiOnLili.setLatLng([rudiLat, rudiLng]);
+
+      markerLiliOnRudi.setLatLng([liliLat, liliLng]);
+      markerRudiOnRudi.setLatLng([rudiLat, rudiLng]);
+
+      polylineLili.setLatLngs([[liliLat, liliLng], [rudiLat, rudiLng]]);
+      polylineRudi.setLatLngs([[liliLat, liliLng], [rudiLat, rudiLng]]);
+
+      updateDisplay();
+      sendGpsUpdatesToBackend();
+    }
+
+    function updateDisplay() {
+      const dist = haversine(state.lili.lat, state.lili.lng, state.rudi.lat, state.rudi.lng);
+      state.currentDistance = dist;
+      const formatted = formatDistanceFriendly(dist);
+
+      document.getElementById('liliDistanceVal').textContent = formatted;
+      document.getElementById('rudiDistanceVal').textContent = formatted;
+
+      document.getElementById('liliCurrentArea').innerHTML = `${AppIcons.get('pin', { size: 12, style: 'margin-right:4px;' })} ${state.lili.area}`;
+      document.getElementById('rudiCurrentArea').innerHTML = `${AppIcons.get('pin', { size: 12, style: 'margin-right:4px;' })} ${state.rudi.area}`;
+
+      document.getElementById('liliPartnerLocText').textContent = `Pria: ${state.rudi.area}`;
+      document.getElementById('rudiPartnerLocText').textContent = `Wanita: ${state.lili.area}`;
+
+      const desc = dist > 50000 ? `Antar Kota/Provinsi (${formatted})` : dist > 1000 ? `Beda Wilayah (${formatted})` : `Dekat (${formatted})`;
+      document.getElementById('liliDistanceStatus').innerHTML = `${AppIcons.get('globe', { size: 12, style: 'margin-right:4px;' })} ${desc}`;
+      document.getElementById('rudiDistanceStatus').innerHTML = `${AppIcons.get('globe', { size: 12, style: 'margin-right:4px;' })} ${desc}`;
+    }
+
+    function fitBothMaps() {
+      const bounds = L.latLngBounds([
+        [state.lili.lat, state.lili.lng],
+        [state.rudi.lat, state.rudi.lng]
+      ]);
+      mapLili.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      mapRudi.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+
+    function focusMe(who) {
+      if (who === 'lili') mapLili.setView([state.lili.lat, state.lili.lng], 16);
+      else mapRudi.setView([state.rudi.lat, state.rudi.lng], 16);
+    }
+
+    function focusPartner(who) {
+      if (who === 'lili') {
+        mapLili.setView([state.rudi.lat, state.rudi.lng], 16);
+        log(`[Wanita Zoom] Memusatkan peta ke lokasi Pria di ${state.rudi.area}`);
+      } else {
+        mapRudi.setView([state.lili.lat, state.lili.lng], 16);
+        log(`[Pria Zoom] Memusatkan peta ke lokasi Wanita di ${state.lili.area}`);
+      }
+    }
+
+    // Connect WebSockets
+    function initWebSockets() {
+      try {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host || 'localhost:3000';
+        const wsUrl = `${wsProtocol}//${host}/ws`;
+
+        state.lili.ws = new WebSocket(`${wsUrl}?device_token=${state.lili.token}`);
+        state.rudi.ws = new WebSocket(`${wsUrl}?device_token=${state.rudi.token}`);
+
+        state.lili.ws.onopen = () => log('[WebSocket Wanita] Terkoneksi ke server.', 'success');
+        state.rudi.ws.onopen = () => log('[WebSocket Pria] Terkoneksi ke server.', 'success');
+
+        state.lili.ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data);
+          if (msg.event === 'partner_location_update') {
+            log(`[Wanita Menerima Posisi Pria]: Lat=${msg.data.location.latitude.toFixed(4)}, Jarak=${msg.data.distanceFormatted}`);
+          } else if (msg.event === 'partner_poke_received') {
+            log(`❤️ [Wanita Menerima Sentuhan]: ${msg.data.senderName} mengirim getaran cinta!`, 'highlight');
+            showSimulatorHeart('lili');
+          }
+        };
+
+        state.rudi.ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data);
+          if (msg.event === 'partner_location_update') {
+            log(`[Pria Menerima Posisi Wanita]: Lat=${msg.data.location.latitude.toFixed(4)}, Jarak=${msg.data.distanceFormatted}`);
+          } else if (msg.event === 'partner_poke_received') {
+            log(`❤️ [Pria Menerima Sentuhan]: ${msg.data.senderName} mengirim getaran cinta!`, 'highlight');
+            showSimulatorHeart('rudi');
+          }
+        };
+      } catch (err) {
+        log(`[WebSocket Error]: ${err.message}`);
+      }
+    }
+
+    function sendGpsUpdatesToBackend() {
+      ['lili', 'rudi'].forEach(who => {
+        const dev = state[who];
+        if (dev.ws && dev.ws.readyState === WebSocket.OPEN) {
+          dev.ws.send(JSON.stringify({
+            event: 'location_update',
+            data: {
+              latitude: dev.lat,
+              longitude: dev.lng,
+              accuracy: 5,
+              speed: 1.5,
+              heading: 45,
+              battery: 92
+            }
+          }));
+        }
+      });
+    }
+
+    function toggle10sLoop() {
+      const btn = document.getElementById('toggleLoopBtn');
+      if (state.loopInterval) {
+        clearInterval(state.loopInterval);
+        state.loopInterval = null;
+        btn.innerHTML = `${AppIcons.get('refresh', { size: 14, style: 'margin-right:6px;' })} Mulai Kirim GPS Otomatis (Tiap 10s)`;
+        btn.classList.remove('primary');
+        log('[Loop] Pengiriman otomatis dihentikan.');
+      } else {
+        btn.innerHTML = `${AppIcons.get('stop', { size: 14, style: 'margin-right:6px;' })} Hentikan Kirim Otomatis`;
+        btn.classList.add('primary');
+        log('[Loop] Siklus otomatis 10 detik diaktifkan.', 'highlight');
+
+        state.countdown = 10;
+        state.loopInterval = setInterval(() => {
+          state.countdown--;
+          if (state.countdown <= 0) {
+            state.countdown = 10;
+            const jitterLat = state.rudi.lat + (Math.random() - 0.5) * 0.0003;
+            const jitterLng = state.rudi.lng + (Math.random() - 0.5) * 0.0003;
+            updatePositions(state.lili.lat, state.lili.lng, jitterLat, jitterLng);
+            log(`[10s Tick] GPS terkirim via internet. Jarak: ${formatDistanceFriendly(state.currentDistance)}`);
+          }
+          document.getElementById('liliCountdown').textContent = `${state.countdown}s`;
+          document.getElementById('rudiCountdown').textContent = `${state.countdown}s`;
+        }, 1000);
+      }
+    }
+
+    function manualRefreshSimulator(who) {
+      const devName = who === 'lili' ? 'Wanita (#1)' : 'Pria (#2)';
+      log(`[Refresh Manual] Permintaan sinkronisasi GPS ${devName} atas kuasa Anda...`, 'highlight');
+      sendGpsUpdatesToBackend();
+      updateDisplay();
+      log(`[Refresh Sukses] Posisi & jarak ${devName} berhasil diperbarui!`, 'success');
+    }
+
+    async function triggerAutoPair() {
+      log('[Pairing] Menghubungkan kedua perangkat secara timbal-balik...', 'highlight');
+      log('[Pairing Sukses] Perangkat Wanita (#1) dan Pria (#2) Berhasil Terdaftar & Saling Terhubung!', 'success');
+      document.getElementById('liliPartnerMeta').innerHTML = '<span class="status-dot green"></span> Online • Terhubung';
+      document.getElementById('rudiPartnerMeta').innerHTML = '<span class="status-dot green"></span> Online • Terhubung';
+    }
+
+    function clearLogs() {
+      document.getElementById('consoleLogs').innerHTML = '';
+    }
+
+    function openQrModal() {
+      document.getElementById('phoneQrModal').style.display = 'flex';
+    }
+
+    function closeQrModal() {
+      document.getElementById('phoneQrModal').style.display = 'none';
+    }
+
+    window.onload = () => {
+      initMaps();
+      initWebSockets();
+      // Otomatis meminta lokasi asli GPS saat pertama kali dibuka
+      detectRealGPS();
+    };
+
+    function simulatorSendPoke(fromWho) {
+      const dev = state[fromWho];
+      if (dev && dev.ws && dev.ws.readyState === WebSocket.OPEN) {
+        dev.ws.send(JSON.stringify({ event: 'send_poke', data: { type: 'heart' } }));
+        log(`❤️ [${fromWho === 'lili' ? 'Wanita' : 'Pria'}] Mengirim getaran cinta ke pasangan.`);
+        showSimulatorHeart(fromWho);
+      } else {
+        log('WebSocket belum terhubung. Harap klik Pasangkan Perangkat terlebih dahulu.', 'highlight');
+      }
+    }
+
+    function showSimulatorHeart(who) {
+      const container = who === 'lili' ? document.getElementById('mapLili') : document.getElementById('mapRudi');
+      if (!container) return;
+      const heart = document.createElement('div');
+      heart.className = 'sim-floating-heart';
+      heart.textContent = '❤️';
+      container.appendChild(heart);
+      setTimeout(() => heart.remove(), 2100);
+    }
+
+  </script>
+
+  <!-- Modal Popup Buka di HP Fisik -->
+  <div id="phoneQrModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); z-index:2000; justify-content:center; align-items:center; padding:20px;">
+    <div style="background:#131B2E; border:1px solid #38BDF8; border-radius:24px; max-width:440px; width:100%; padding:28px; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,0.8);">
+      <h2 style="color:#38BDF8; font-size:20px; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <app-icon name="phone" size="20"></app-icon> Buka Aplikasi di HP Anda
+      </h2>
+      <p style="color:#94A3B8; font-size:13px; margin-bottom:20px;">Scan QR Code ini menggunakan Kamera HP atau ketik alamat URL di browser ponsel Anda:</p>
+
+      <div style="background:#fff; display:inline-block; padding:12px; border-radius:16px; margin-bottom:18px; box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://hudson-yoga-court-specialist.trycloudflare.com/" alt="QR Code Tanpilan" style="display:block; width:200px; height:200px;" />
+      </div>
+
+      <div style="background:#090D16; border:1px solid #243049; border-radius:10px; padding:10px; margin-bottom:16px;">
+        <span style="color:#94A3B8; font-size:11px; display:block;">Alamat URL HTTPS Resmi (Akses GPS Akurat 3m):</span>
+        <a href="https://hudson-yoga-court-specialist.trycloudflare.com/" target="_blank" style="color:#34D399; font-size:15px; font-weight:bold; word-break:break-all; text-decoration:none;">
+          https://hudson-yoga-court-specialist.trycloudflare.com/
+        </a>
+      </div>
+
+      <div style="color:#CBD5E1; font-size:12px; text-align:left; line-height:1.6; margin-bottom:20px;">
+        <app-icon name="lock" size="14" color="#10B981" style="margin-right:4px;"></app-icon> <strong>Koneksi HTTPS Terenkripsi Aktif:</strong><br>
+        1. Buka link di atas di browser HP (Chrome / Safari) atau scan QR.<br>
+        2. Klik <strong>"Allow / Izinkan"</strong> saat HP meminta izin lokasi.<br>
+        3. Sensor GPS satelit HP akan otomatis aktif dan mengunci posisi Anda dengan akurasi meteran asli!
+      </div>
+
+      <button onclick="closeQrModal()" style="width:100%; background:#0284C7; color:#fff; border:none; padding:12px; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer;">
+        Tutup
+      </button>
+    </div>
+  </div>
+</body>
+</html>

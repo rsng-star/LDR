@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  tanpilan-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tanpilan-tracking-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - JWT_SECRET=tanpilan_production_secret_key_2026
+      - GPS_INTERVAL_SECONDS=10
+      - DISTANCE_ALERT_THRESHOLD_METERS=100
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

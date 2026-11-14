@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Tanpilan Tracking",
+    "slug": "tanpilan-tracking",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E293B"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tanpilan.tracking",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "fetch", "remote-notification"],
+        "NSLocationWhenInUseUsageDescription": "Aplikasi Tanpilan membutuhkan akses lokasi untuk menampilkan posisi Anda dan pasangan di peta secara realtime.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikasi Tanpilan membutuhkan izin lokasi di latar belakang setiap 10 detik untuk memantau keamanan pasangan.",
+        "NSCameraUsageDescription": "Kamera digunakan untuk memindai kode QR perangkat pasangan."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1E293B"
+      },
+      "package": "com.tanpilan.tracking",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "CAMERA",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
+    }
+  }
+}
