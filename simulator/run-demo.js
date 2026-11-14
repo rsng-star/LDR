@@ -55,7 +55,7 @@ async function runDemo() {
   const wanitaAuth = await request(`${BASE_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: { email: wanitaEmail, password: 'Password123' }
+    body: { email: wanitaEmail, password: 'SecureDemoPass2026!' }
   });
   const wanitaToken = wanitaAuth.data.token;
   console.log(`   Wanita terdaftar: User ID #${wanitaAuth.data.user.id}`);
@@ -75,7 +75,7 @@ async function runDemo() {
   const priaAuth = await request(`${BASE_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: { email: priaEmail, password: 'Password123' }
+    body: { email: priaEmail, password: 'SecureDemoPass2026!' }
   });
   const priaToken = priaAuth.data.token;
   console.log(`   Pria terdaftar: User ID #${priaAuth.data.user.id}`);

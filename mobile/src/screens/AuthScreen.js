@@ -12,7 +12,7 @@ export default function AuthScreen({ onAuthSuccess }) {
   // Quick Persona Presets (Wanita & Pria)
   const setPersona = (name, mail) => {
     setEmail(mail);
-    setPassword('Password123');
+    setPassword('PersonaSecurePass2026!');
     setDeviceName(name);
   };
 
