@@ -222,7 +222,9 @@ async function runE2ETests() {
 
 // Jalankan jika dieksekusi langsung
 if (require.main === module) {
-  runE2ETests().catch((err) => {
+  runE2ETests().then(() => {
+    process.exit(0);
+  }).catch((err) => {
     console.error('❌ E2E TEST GAGAL:', err);
     process.exit(1);
   });

@@ -30,7 +30,7 @@ wsServerManager.init(server);
 // P0-2, K0-1, K0-2: Content Security Policy (CSP) & Proteksi Header Ketat
 const isProductionHttps = process.env.NODE_ENV === 'production' && (process.env.FORCE_HTTPS === 'true' || process.env.HTTPS === 'true');
 
-app.use(helmet({
+const mainAppHelmet = helmet({
   contentSecurityPolicy: {
     useDefaults: false,
     directives: {
@@ -49,7 +49,34 @@ app.use(helmet({
     }
   },
   crossOriginEmbedderPolicy: false
-}));
+});
+
+const simulatorHelmet = helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", "https://api.qrserver.com", ...MAP_TILE_DOMAINS],
+      connectSrc: ["'self'", "ws:", "wss:", "https://ipwho.is"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+});
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/simulator')) {
+    return simulatorHelmet(req, res, next);
+  }
+  return mainAppHelmet(req, res, next);
+});
 
 // P2-2: CORS dibatasi ke origin aplikasi lokal atau environment yang dikenal
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -141,7 +168,7 @@ try {
 } catch (e) {
   console.error('[Auto-Cleanup Error]:', e.message);
 }
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   try {
     const cleaned = cleanupOldData(config.MAX_HISTORY_DAYS || 30);
     console.log(`[Auto-Cleanup] Rutin: ${cleaned} lokasi kedaluwarsa dibersihkan`);
@@ -149,6 +176,7 @@ setInterval(() => {
     console.error('[Auto-Cleanup Error]:', e.message);
   }
 }, 12 * 3600 * 1000);
+cleanupTimer.unref();
 
 process.on('uncaughtException', (err) => {
   console.error('[UNCAUGHT EXCEPTION]:', err);

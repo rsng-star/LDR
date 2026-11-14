@@ -32,15 +32,30 @@ class WebSocketServerManager {
       for (const ws of this.wss.clients) {
         if (ws.isAlive === false) {
           console.log(`[WebSocket] Mematikan koneksi zombie (deviceId: ${ws.deviceId || 'unauthed'})`);
-          ws.terminate();
+          try { ws.terminate(); } catch (e) {}
           continue;
         }
         ws.isAlive = false;
-        ws.ping();
+        try { ws.ping(); } catch (e) {}
       }
     }, 30000);
 
     console.log('[WebSocket] Server diinisialisasi pada path /ws dengan proteksi maxPayload 16KB & Heartbeat 30s');
+  }
+
+  safeSend(ws, payload) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      ws.send(data, (err) => {
+        if (err) {
+          // Socket error pada write diabaikan secara aman tanpa melempar uncaught exception
+        }
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   handleConnection(ws, req) {
@@ -58,7 +73,7 @@ class WebSocketServerManager {
         await this.handleMessage(ws, message);
       } catch (err) {
         console.error('[WebSocket] Format pesan tidak valid:', err.message);
-        ws.send(JSON.stringify({ event: 'error', message: 'Format pesan JSON tidak valid' }));
+        this.safeSend(ws, { event: 'error', message: 'Format pesan JSON tidak valid' });
       }
     });
 
@@ -86,13 +101,13 @@ class WebSocketServerManager {
     const dev = getDeviceById(deviceId);
     console.log(`[WebSocket] Perangkat #${deviceId} (${dev?.device_name || 'Device'}) terautentikasi.`);
 
-    ws.send(JSON.stringify({
+    this.safeSend(ws, {
       event: 'authenticated',
       data: {
         deviceId,
         message: 'Koneksi realtime WebSocket aktif'
       }
-    }));
+    });
 
     // P0-4: Beri tahu pasangan timbal balik bahwa perangkat ini sedang online
     const verifiedPartner = getVerifiedPartner(deviceId);
@@ -136,14 +151,14 @@ class WebSocketServerManager {
 
     // Heartbeat ping-pong dapat dibalas langsung tanpa perlu otentikasi
     if (event === 'ping') {
-      return ws.send(JSON.stringify({ event: 'pong', timestamp: Date.now() }));
+      return this.safeSend(ws, { event: 'pong', timestamp: Date.now() });
     }
 
     // Otentikasi lewat pesan 'auth' pertama
     if (event === 'auth') {
       // P2-3: Cegah satu socket mengirim 'auth' berulang untuk mendaftar ke banyak perangkat
       if (ws.deviceId) {
-        return ws.send(JSON.stringify({ event: 'error', message: 'Socket sudah terotentikasi dan tidak dapat diubah' }));
+        return this.safeSend(ws, { event: 'error', message: 'Socket sudah terotentikasi dan tidak dapat diubah' });
       }
 
       const { deviceToken } = data || {};
@@ -151,13 +166,13 @@ class WebSocketServerManager {
       if (dev) {
         this.registerClient(dev.id, ws);
       } else {
-        ws.send(JSON.stringify({ event: 'auth_failed', message: 'Token perangkat tidak valid' }));
+        this.safeSend(ws, { event: 'auth_failed', message: 'Token perangkat tidak valid' });
       }
       return;
     }
 
     if (!ws.deviceId) {
-      return ws.send(JSON.stringify({ event: 'error', message: 'Harap otentikasi terlebih dahulu dengan event auth' }));
+      return this.safeSend(ws, { event: 'error', message: 'Harap otentikasi terlebih dahulu dengan event auth' });
     }
 
     const now = Date.now();
@@ -166,7 +181,7 @@ class WebSocketServerManager {
       case 'location_update': {
         // P2-3: Batasi laju pesan (location_update maksimal 1 per 2 detik per socket)
         if (now - ws.lastLocationUpdate < 2000) {
-          return ws.send(JSON.stringify({ event: 'rate_limited', message: 'Terlalu cepat: maksimal 1 update lokasi per 2 detik' }));
+          return this.safeSend(ws, { event: 'rate_limited', message: 'Terlalu cepat: maksimal 1 update lokasi per 2 detik' });
         }
         ws.lastLocationUpdate = now;
 
@@ -182,12 +197,12 @@ class WebSocketServerManager {
               battery: validateBattery(data.battery)
             });
 
-            ws.send(JSON.stringify({
+            this.safeSend(ws, {
               event: 'location_ack',
               data: res
-            }));
+            });
           } catch (e) {
-            ws.send(JSON.stringify({ event: 'error', message: e.message }));
+            this.safeSend(ws, { event: 'error', message: e.message });
           }
         }
         break;
@@ -214,7 +229,7 @@ class WebSocketServerManager {
       case 'send_poke': {
         // P2-3: Batasi laju pesan (send_poke maksimal 1 per 5 detik per socket)
         if (now - ws.lastPoke < 5000) {
-          return ws.send(JSON.stringify({ event: 'rate_limited', message: 'Harap tunggu 5 detik sebelum menyapa lagi' }));
+          return this.safeSend(ws, { event: 'rate_limited', message: 'Harap tunggu 5 detik sebelum menyapa lagi' });
         }
         ws.lastPoke = now;
 
@@ -238,10 +253,10 @@ class WebSocketServerManager {
             }
           });
 
-          ws.send(JSON.stringify({
+          this.safeSend(ws, {
             event: 'poke_sent_ack',
             data: { success: true, type: pokeType }
-          }));
+          });
         }
         break;
       }
@@ -253,11 +268,10 @@ class WebSocketServerManager {
 
   sendToDevice(deviceId, payload) {
     if (!this.clients.has(deviceId)) return false;
-    const stringData = JSON.stringify(payload);
+    const stringData = typeof payload === 'string' ? payload : JSON.stringify(payload);
     let sentCount = 0;
     for (const ws of this.clients.get(deviceId)) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(stringData);
+      if (this.safeSend(ws, stringData)) {
         sentCount++;
       }
     }
