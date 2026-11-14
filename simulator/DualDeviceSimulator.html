@@ -18,6 +18,10 @@
       vertical-align: middle;
       display: inline-block;
     }
+    .map-tiles-dark {
+      filter: brightness(0.75) invert(1) contrast(2) hue-rotate(215deg) saturate(0.2) brightness(0.8) !important;
+    }
+
     .status-dot {
       display: inline-block;
       width: 7px;
@@ -714,10 +718,10 @@
 
     function initMaps() {
       mapLili = L.map('mapLili', { zoomControl: false, attributionControl: false }).setView([state.lili.lat, state.lili.lng], 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapLili);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'map-tiles-dark' }).addTo(mapLili);
 
       mapRudi = L.map('mapRudi', { zoomControl: false, attributionControl: false }).setView([state.rudi.lat, state.rudi.lng], 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapRudi);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'map-tiles-dark' }).addTo(mapRudi);
 
       // Icon markers
       const iconLili = L.divIcon({ className: 'pulse-marker pulse-lili', iconSize: [20, 20] });

@@ -39,7 +39,7 @@ const mainAppHelmet = helmet({
       scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", ...MAP_TILE_DOMAINS],
+      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", "https://*.basemaps.cartocdn.com", ...MAP_TILE_DOMAINS],
       connectSrc: ["'self'", "ws:", "wss:", "https://ipwho.is"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],

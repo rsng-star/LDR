@@ -509,6 +509,12 @@
       filter: saturate(0.88) contrast(1.02);
     }
 
+    /* K2: Clean, zero-API-key dark mode map tiles (Watermark-Free) */
+    .leaflet-tile.map-tiles-dark,
+    .map-tiles-dark {
+      filter: brightness(0.75) invert(1) contrast(2) hue-rotate(215deg) saturate(0.2) brightness(0.8) !important;
+    }
+
     .dark-tiles .leaflet-tile {
       filter: brightness(0.68) contrast(1.12) sepia(0.2) grayscale(0.2);
     }
