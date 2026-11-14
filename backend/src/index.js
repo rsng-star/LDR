@@ -39,7 +39,7 @@ const mainAppHelmet = helmet({
       scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", "https://*.basemaps.cartocdn.com", ...MAP_TILE_DOMAINS],
+      imgSrc: ["'self'", "data:", "blob:", "https://unpkg.com", "https://*.basemaps.cartocdn.com", "https://*.tile.openstreetmap.org", ...MAP_TILE_DOMAINS],
       connectSrc: ["'self'", "ws:", "wss:", "https://ipwho.is"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
@@ -48,7 +48,8 @@ const mainAppHelmet = helmet({
       upgradeInsecureRequests: isProductionHttps ? [] : null
     }
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
 const simulatorHelmet = helmet({
@@ -68,7 +69,8 @@ const simulatorHelmet = helmet({
       frameAncestors: ["'self'"]
     }
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
 app.use((req, res, next) => {
