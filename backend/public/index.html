@@ -16,14 +16,39 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=Fraunces:ital,opsz,wght@0,9..144,500..800;1,9..144,500..800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <!-- QRCode.js for 1-Tap Mobile Pairing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZepKZnTWX5mIor3WsqYoUJb0838Pe8cV+BRyzzydkS3JfDUJ37nx29NeG0Q480pxxxIZ8FQ==" crossorigin="anonymous"></script>
   <!-- Tanpilan Vector Asset Icon System -->
   <script src="/assets/icons.js"></script>
 
   <style>
+    
+    /* P3-2: Persistent Sharing Consent Indicator */
+    .sharing-consent-indicator {
+      background: var(--status-live-bg);
+      color: var(--status-live);
+      border-bottom: 1px solid var(--paper-border);
+      padding: var(--space-1) var(--space-3);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      z-index: var(--z-hud);
+      text-align: center;
+    }
+    .sharing-consent-indicator.is-active {
+      display: flex;
+    }
+    .sharing-consent-indicator.is-paused {
+      display: flex;
+      background: var(--status-standby-bg);
+      color: var(--status-standby);
+    }
+
     /* Vector Asset Icon Component */
     app-icon {
       display: inline-flex;
@@ -2018,6 +2043,12 @@
     </div>
   </header>
 
+  <!-- P3-2: Indikator Berbagi Lokasi Aktif (Persistent Privacy Indicator) -->
+  <div id="sharingConsentIndicator" class="sharing-consent-indicator" role="status" aria-live="polite">
+    <app-icon name="shield" size="13"></app-icon>
+    <span id="sharingConsentText">Lokasimu dibagikan secara live ke pasangan</span>
+  </div>
+
   <!-- Banner Status Sambungan (State 5) -->
   <div id="connectionBanner" class="connection-status-banner" role="status" aria-live="polite">
     <app-icon name="alert" size="14"></app-icon>
@@ -2256,8 +2287,18 @@
           <span class="settings-value settings-tag status-live">Setiap 10 Detik</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Keamanan Jalur</span>
-          <span class="settings-value">Terenkripsi Antar Perangkat</span>
+          <span class="settings-label">Status Berbagi</span>
+          <span class="settings-value" id="setSharingStatusText">Aktif</span>
+        </div>
+        <div class="settings-row">
+          <button class="btn-secondary-action" id="btnPauseSharing" onclick="togglePauseSharing()" style="width: 100%;">
+            <app-icon name="stop" size="14"></app-icon> <span id="btnPauseSharingText">Jeda Berbagi Lokasi</span>
+          </button>
+        </div>
+        <div class="settings-row">
+          <button class="btn-secondary-action" id="btnUnpairDevice" onclick="confirmUnpair()" style="width: 100%;">
+            <app-icon name="link" size="14"></app-icon> Putuskan Hubungan (Unpair)
+          </button>
         </div>
       </div>
 
@@ -2276,9 +2317,12 @@
         </div>
       </details>
 
-      <div class="settings-actions">
-        <button class="btn-danger-action" onclick="resetProfile()">
-          <app-icon name="trash" size="15"></app-icon> Keluar & Ganti Akun
+      <div class="settings-actions" style="display: flex; flex-direction: column; gap: var(--space-2);">
+        <button class="btn-secondary-action" onclick="resetProfile()">
+          <app-icon name="refresh" size="15"></app-icon> Keluar Akun
+        </button>
+        <button class="btn-danger-action" onclick="confirmDeleteAllData()">
+          <app-icon name="trash" size="15"></app-icon> Hapus Semua Data Saya (GDPR)
         </button>
       </div>
     </div>
@@ -2459,6 +2503,17 @@
   </div>
 
   <script>
+    // Helper Sanitasi Stored XSS (P0-2)
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     // Aksesibilitas: Keyboard Focus Trap & Escape Handler
     window.addEventListener('keydown', (e) => {
       const activeModal = document.querySelector('.modal-overlay.active');
@@ -2705,21 +2760,31 @@
     async function finishOnboarding() {
       const custom = document.getElementById('customNameInput').value.trim();
       const chosen = custom || appState.selectedRole;
-      const email = `${chosen.toLowerCase().replace(/\s+/g, '')}_${Date.now()}@tanpilan.local`;
+      const randBytes = new Uint8Array(12);
+      crypto.getRandomValues(randBytes);
+      const randSuffix = Array.from(randBytes, b => b.toString(16).padStart(2, '0')).join('');
+      const email = `${chosen.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randSuffix.slice(0, 8)}@tanpilan.local`;
+      const pwdBytes = new Uint8Array(24);
+      crypto.getRandomValues(pwdBytes);
+      const randomPassword = Array.from(pwdBytes, b => b.toString(16).padStart(2, '0')).join('');
 
       try {
         const authRes = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: 'Password123' })
+          body: JSON.stringify({ email, password: randomPassword })
         }).then(r => r.json());
 
-        const devToken = `dev_${authRes.user.id}_${Date.now()}`;
+        if (!authRes.token) throw new Error(authRes.error || 'Gagal registrasi akun');
+
+        // P0-1: Token dibuat SERVER crypto.randomBytes, klien tidak lagi memilih token
         const devRes = await fetch('/api/device/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authRes.token}` },
-          body: JSON.stringify({ deviceToken: devToken, deviceName: `HP ${chosen}` })
+          body: JSON.stringify({ deviceName: `HP ${chosen}` })
         }).then(r => r.json());
+
+        if (!devRes.device) throw new Error(devRes.error || 'Gagal mendaftarkan perangkat');
 
         appState.user = authRes.user;
         appState.user.token = authRes.token;
@@ -2827,7 +2892,8 @@
 
     function initWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws?device_token=${appState.device.device_token}`;
+      // P2-3: Hapus token dari query string demi keamanan, gunakan pesan auth pertama
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
 
       appState.ws = new WebSocket(wsUrl);
 
@@ -2838,9 +2904,15 @@
             onPartnerLocationUpdate(msg.data);
           } else if (msg.event === 'partner_poke_received') {
             onPartnerPokeReceived(msg.data);
+          } else if (msg.event === 'partner_status') {
+            if (appState.partner) {
+              appState.partner.isOnline = Boolean(msg.data.isOnline);
+              appState.partner.lastSeen = msg.data.lastSeen;
+            }
+            updateConnectionStateHUD();
           } else if (msg.event === 'pairing_success') {
             triggerHaptic('success');
-            alert(msg.data.message);
+            showToast(msg.data.message || 'Perangkat berhasil terhubung!', 'heart');
             loadPartnerTelemetry();
           }
         } catch (e) { }
@@ -2849,7 +2921,14 @@
       appState.ws.onopen = () => {
         const banner = document.getElementById('connectionBanner');
         if (banner) banner.classList.remove('is-active');
+        if (appState.device && appState.device.device_token) {
+          appState.ws.send(JSON.stringify({
+            event: 'auth',
+            data: { deviceToken: appState.device.device_token }
+          }));
+        }
         updateConnectionStateHUD();
+        updateSharingConsentUI();
       };
 
       appState.ws.onclose = () => {
@@ -2938,7 +3017,7 @@
         if (placeBadge) {
           placeBadge.style.display = 'inline-flex';
           placeBadge.className = 'place-badge is-live';
-          placeBadge.innerHTML = `${AppIcons.get('home', { size: 12 })} ${data.matchedPlace.name}`;
+          placeBadge.innerHTML = `${AppIcons.get('home', { size: 12 })} <span>${escapeHtml(data.matchedPlace.name)}</span>`;
         }
         if (cardPlaceVal) cardPlaceVal.textContent = data.matchedPlace.name;
       } else {
@@ -3325,7 +3404,7 @@
           `;
         }).join('');
       } catch (err) {
-        listEl.innerHTML = `<div class="history-empty-message error">Gagal memuat: ${err.message}</div>`;
+        listEl.innerHTML = `<div class="history-empty-message error">Gagal memuat: ${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -3436,10 +3515,125 @@
     }
 
 
-    function resetProfile() {
+    async function resetProfile() {
       if (confirm('Keluar dan reset profil perangkat ini?')) {
+        try {
+          if (appState.user && appState.user.token) {
+            await fetch('/api/auth/logout', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${appState.user.token}` }
+            });
+          }
+        } catch (e) { }
         localStorage.clear();
         location.reload();
+      }
+    }
+
+    async function togglePauseSharing() {
+      triggerHaptic('light');
+      if (!appState.device) return;
+      const currentlyPaused = Boolean(appState.device.is_sharing_paused);
+      const nextPause = !currentlyPaused;
+
+      try {
+        const res = await fetch('/api/device/pause-sharing', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${appState.user.token}`
+          },
+          body: JSON.stringify({ pause: nextPause })
+        }).then(r => r.json());
+
+        appState.device.is_sharing_paused = res.isSharingPaused ? 1 : 0;
+        localStorage.setItem('tanpilan_device', JSON.stringify(appState.device));
+        updateSharingConsentUI();
+        showToast(res.message, 'shield');
+      } catch (err) {
+        showToast('Gagal mengubah status jeda berbagi: ' + err.message, 'alert');
+      }
+    }
+
+    async function confirmUnpair() {
+      triggerHaptic('light');
+      if (!confirm('Putuskan hubungan dengan pasangan sekarang? Akses riwayat dan lokasi akan langsung dihentikan.')) {
+        return;
+      }
+      try {
+        const res = await fetch('/api/device/unpair', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${appState.user.token}` }
+        }).then(r => r.json());
+
+        appState.device.partner_device_id = null;
+        appState.partnerCoords = null;
+        localStorage.setItem('tanpilan_device', JSON.stringify(appState.device));
+        closeModal('settingsModal');
+        updateConnectionStateHUD();
+        updateSharingConsentUI();
+        showToast('Perangkat berhasil diputuskan.', 'link');
+        if (markerPartner) {
+          map.removeLayer(markerPartner);
+          markerPartner = null;
+        }
+      } catch (err) {
+        showToast('Gagal unpair: ' + err.message, 'alert');
+      }
+    }
+
+    async function confirmDeleteAllData() {
+      triggerHaptic('alert');
+      const confirm1 = confirm('PERINGATAN: Seluruh akun, perangkat, tempat favorit, dan riwayat lokasi Anda akan DIHAPUS PERMANEN dari server. Lanjutkan?');
+      if (!confirm1) return;
+
+      try {
+        await fetch('/api/auth/me/data', {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${appState.user.token}` }
+        });
+        localStorage.clear();
+        alert('Seluruh data Anda telah berhasil dihapus permanen.');
+        location.reload();
+      } catch (err) {
+        alert('Gagal menghapus data: ' + err.message);
+      }
+    }
+
+    function updateSharingConsentUI() {
+      const indicator = document.getElementById('sharingConsentIndicator');
+      const textEl = document.getElementById('sharingConsentText');
+      const pauseBtnText = document.getElementById('btnPauseSharingText');
+      const sharingStatusText = document.getElementById('setSharingStatusText');
+
+      const isPaired = appState.device && appState.device.partner_device_id;
+      const isPaused = appState.device && appState.device.is_sharing_paused;
+
+      if (pauseBtnText) {
+        pauseBtnText.textContent = isPaused ? 'Lanjutkan Berbagi' : 'Jeda Berbagi Lokasi';
+      }
+      if (sharingStatusText) {
+        sharingStatusText.textContent = isPaused ? 'Dijeda' : (isPaired ? 'Aktif' : 'Belum Berpasangan');
+      }
+
+      if (!indicator || !textEl) return;
+
+      if (!isPaired) {
+        indicator.classList.remove('is-active', 'is-paused');
+        indicator.style.display = 'none';
+        return;
+      }
+
+      indicator.style.display = 'flex';
+      if (isPaused) {
+        indicator.classList.remove('is-active');
+        indicator.classList.add('is-paused');
+        textEl.textContent = 'Berbagi lokasi sedang DIJEDA oleh Anda';
+      } else {
+        indicator.classList.remove('is-paused');
+        indicator.classList.add('is-active');
+        const partnerName = appState.partner ? appState.partner.name : 'Pasangan';
+        textEl.textContent = `Lokasimu sedang dibagikan secara live ke ${partnerName}`;
       }
     }
 
@@ -3519,8 +3713,17 @@
         toast.className = 'app-toast';
         document.body.appendChild(toast);
       }
-      const iconMarkup = icon ? AppIcons.get(icon, { size: 16 }) : '';
-      toast.innerHTML = `${iconMarkup}<span>${msg}</span>`;
+      toast.replaceChildren();
+      if (icon) {
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'toast-icon';
+        iconSpan.innerHTML = AppIcons.get(icon, { size: 16 });
+        toast.appendChild(iconSpan);
+      }
+      const textSpan = document.createElement('span');
+      textSpan.className = 'toast-text';
+      textSpan.textContent = String(msg || '');
+      toast.appendChild(textSpan);
       toast.classList.add('active');
       clearTimeout(toast._timeout);
       toast._timeout = setTimeout(() => toast.classList.remove('active'), 3200);
@@ -3627,19 +3830,19 @@
           <div class="saved-place-item">
             <div>
               <div class="saved-place-name">
-                <app-icon name="home" size="14"></app-icon> <span>${p.name}</span>
+                <app-icon name="home" size="14"></app-icon> <span>${escapeHtml(p.name)}</span>
               </div>
               <div class="saved-place-meta">
                 Radius ${p.radius_meters}m • (${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)})
               </div>
             </div>
-            <button onclick="deletePlace(${p.id})" class="btn-delete-place" title="Hapus tempat" aria-label="Hapus tempat ${p.name}">
+            <button onclick="deletePlace(${p.id})" class="btn-delete-place" title="Hapus tempat" aria-label="Hapus tempat ${escapeHtml(p.name)}">
               <app-icon name="trash" size="14"></app-icon>
             </button>
           </div>
         `).join('');
       } catch (err) {
-        listEl.innerHTML = `<div class="history-empty-message error">Gagal: ${err.message}</div>`;
+        listEl.innerHTML = `<div class="history-empty-message error">Gagal: ${escapeHtml(err.message)}</div>`;
       }
     }
 
