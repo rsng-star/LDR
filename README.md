@@ -1,28 +1,40 @@
-# 📍 Aplikasi Tanpilan: Tracking Dua Device Tanpa Web
+# 📍 Aplikasi Tanpilan: Pelacak Lokasi Pasangan Realtime
 
-Implementasi lengkap sistem pelacakan lokasi realtime antar 2 perangkat mobile (Android & iOS) tanpa antarmuka web, berdasarkan dokumen spesifikasi teknis dan PRD `aplikasi traking.md`.
+Aplikasi web progresif (PWA) dan backend pelacakan lokasi realtime antar-dua orang/perangkat dengan estetika *warm cartography* (peta lipat kertas & terakota pekat), didukung enkripsi modern, proteksi anti-stalkerware, dan kepatuhan privasi ketat.
 
 ---
 
 ## 🎯 Gambaran Umum & Fitur Utama
 
-- **Fokus Mobile Native**: Komunikasi push langsung antar dua perangkat mobile (Android & iOS) melalui backend server yang ringan.
-- **Pairing 2 Perangkat (UC-01)**: Pendaftaran perangkat melalui kode 6-digit unik atau scan QR code.
-- **Pelacakan GPS Realtime (UC-02)**: Pengiriman koordinat GPS setiap **10 detik** melalui WebSocket & HTTPS REST, dengan latensi pembaruan < **5 detik** (aktual: ~15 ms).
-- **Peringatan Jarak Otomatis (> 100m)**: Haversine distance calculator memicu push notification dan visual banner saat jarak antar kedua perangkat melebihi 100 meter.
-- **Keamanan Data**: TLS 1.2+, hashing password dengan `bcrypt`, otentikasi JWT, dan data retensi auto-cleanup 30 hari.
+- **Antarmuka Utama (PWA)**: Web app responsif, ramah sentuh seluler (target sentuh ≥44px), dapat diinstal ke Layar Utama (*Add to Home Screen*) tanpa bar browser.
+- **Pairing 1:1 Timbal-Balik (Mutual Pairing)**: Hubungan antar-perangkat diverifikasi secara timbal balik (`A.partner === B` dan `B.partner === A`). Menghubungkan perangkat baru otomatis memutuskan akses perangkat lama secara permanen.
+- **Pelacakan GPS Realtime**: Transmisi koordinat GPS setiap **10 detik** via WebSocket bi-directional streaming dengan latensi pembaruan < 50 ms.
+- **Peringatan Jarak Otomatis**: Perhitungan jarak geodesik Haversine memicu alert otomatis saat jarak melebihi ambang batas.
+- **Geofencing Cerdas (Tempat Favorit)**: Deteksi otomatis saat pasangan tiba di rumah, kantor, atau tempat favorit lainnya.
+- **Proteksi Anti-Stalkerware & Privasi**:
+  - Indikator berbagi lokasi persisten yang selalu terlihat di layar perangkat yang dilacak.
+  - Tombol **Jeda Berbagi Lokasi** untuk menghentikan pembaruan ke pasangan secara instan kapan saja.
+  - Tombol **Putuskan Hubungan (Unpair)** yang langsung memutus akses pasangan ke lokasi dan riwayat lama.
+  - Fitur **Hapus Semua Data Saya (GDPR)** untuk pembersihan permanen akun, perangkat, tempat favorit, dan titik koordinat dari database.
+- **Keamanan Siber Tingkat Lanjut**:
+  - Token perangkat dihasilkan oleh server menggunakan `crypto.randomBytes(32)` dan disimpan dalam bentuk hash SHA-256.
+  - Proteksi Stored XSS dengan sanitasi karakter kontrol dan Subresource Integrity (SRI) pada seluruh skrip CDN.
+  - Content Security Policy (CSP) ketat via `helmet`.
+  - Rate limiting pada endpoint pairing (maksimal 5 percobaan/menit dengan lockout 15 menit).
+  - Masa kedaluwarsa kode pairing 15 menit menggunakan epoch timestamp konsisten.
+  - Retensi data otomatis 30 hari (*auto-cleanup*) terjadwal saat server mulai dan setiap 12 jam.
 
 ---
 
 ## 🏗️ Arsitektur Sistem
 
 ```mermaid
-graph LR
-    Dev1["📱 Perangkat 1 (Wanita)"] <-->|"WebSocket / REST"| Backend["⚡ Backend (Node.js & WebSocket)"]
-    Dev2["📱 Perangkat 2 (Pria)"] <-->|"WebSocket / REST"| Backend
-    Backend <-->|"Query & Save"| DB[("🗄️ Database (SQLite/PostgreSQL)")]
-    Backend -->|"Push Alert (>100m)"| Dev1
-    Backend -->|"Push Alert (>100m)"| Dev2
+flowchart LR
+    Dev1["📱 Perangkat 1 (PWA)"] <-->|"WebSocket / REST (X-Device-Token)"| Backend["⚡ Backend Engine (Node.js & WebSocket)"]
+    Dev2["📱 Perangkat 2 (PWA)"] <-->|"WebSocket / REST (X-Device-Token)"| Backend
+    Backend <-->|"Query & Save (WAL Mode)"| DB[("🗄️ SQLite Database (tanpilan.db)")]
+    Backend -->|"Broadcast Lokasi & Alert"| Dev1
+    Backend -->|"Broadcast Lokasi & Alert"| Dev2
 ```
 
 ---
@@ -31,130 +43,151 @@ graph LR
 
 ```
 aplikasi-tanpilan/
-├── backend/                  # Server Node.js + WebSocket + Database
+├── backend/                       # Server Node.js + WebSocket + SQLite
+│   ├── public/                    # Frontend Web App (PWA) Tanpilan
+│   │   ├── index.html             # Antarmuka PWA (Peta Leaflet, HUD, Sheet, Modal)
+│   │   ├── manifest.json          # PWA Web App Manifest
+│   │   └── assets/                # Vektor ikon SVG mandiri
 │   ├── src/
-│   │   ├── config.js         # Konfigurasi port, interval (10s), ambang jarak (100m)
+│   │   ├── config.js              # Konfigurasi aplikasi & environment
+│   │   ├── index.js               # Express & HTTP/WS server entrypoint
 │   │   ├── db/
-│   │   │   └── database.js   # Skema tabel (users, devices, locations, notifications)
-│   │   ├── utils/
-│   │   │   ├── geo.js        # Rumus Haversine distance & formatting
-│   │   │   └── security.js   # Bcrypt hash, JWT generator, auth middleware
-│   │   ├── services/
-│   │   │   ├── notificationService.js  # Distance alert trigger & push notification
-│   │   │   └── trackingService.js      # Pemrosesan GPS & broadcast realtime
+│   │   │   └── database.js        # Engine database SQLite (node:sqlite) & helpers
 │   │   ├── routes/
-│   │   │   ├── authRoutes.js     # Registrasi & login pengguna
-│   │   │   ├── deviceRoutes.js   # Registrasi device & pairing (UC-01)
-│   │   │   └── locationRoutes.js # Pengiriman GPS & riwayat lokasi (UC-02)
-│   │   ├── websocket/
-│   │   │   └── wsServer.js       # WebSocket bi-directional streaming
-│   │   └── index.js              # Server entry point
+│   │   │   ├── authRoutes.js      # Auth, logout & hapus data
+│   │   │   ├── deviceRoutes.js    # Registrasi device, pairing, pause & unpair
+│   │   │   ├── locationRoutes.js  # Lokasi realtime, riwayat & ringkasan harian
+│   │   │   └── placeRoutes.js     # Tempat favorit & geofencing
+│   │   ├── services/
+│   │   │   ├── trackingService.js # Pipeline pemrosesan koordinat GPS
+│   │   │   └── notificationService.js # Pemicu notifikasi & peringatan jarak
+│   │   ├── utils/
+│   │   │   ├── geo.js             # Haversine distance & formatting
+│   │   │   ├── security.js        # Bcrypt, JWT, auth middleware & pair rate limiter
+│   │   │   └── validators.js      # Modul sanitasi & validasi input terpusat
+│   │   └── websocket/
+│   │       └── wsServer.js        # WebSocket streaming & heartbeat 30 detik
 │   ├── tests/
-│   │   └── backend.test.js       # Pengujian otomatis unit & integrasi
+│   │   ├── backend.test.js        # Pengujian unit geodesi, password & pairing
+│   │   ├── features.test.js       # Pengujian geofencing & ringkasan harian
+│   │   ├── security.test.js       # Pengujian 9 vektor keamanan & privasi
+│   │   └── bug_hunt.test.js       # Audit otomatis DOM, REST API & WebSocket stress
 │   ├── package.json
 │   └── Dockerfile
 │
-├── mobile/                   # Aplikasi Mobile Native (React Native / Expo)
-│   ├── app.json              # Izin lokasi background & notifikasi iOS/Android
-│   ├── App.js                # Navigasi utama
-│   ├── package.json
-│   └── src/
-│       ├── services/
-│       │   ├── api.js            # REST client
-│       │   ├── socket.js         # WebSocket client realtime
-│       │   └── locationService.js# Loop 10 detik pengiriman GPS
-│       └── screens/
-│           ├── AuthScreen.js         # Login Wanita & Pria
-│           ├── PairingScreen.js      # Generate QR/Kode & input pairing (UC-01)
-│           ├── TrackingMapScreen.js  # Peta live + status device + alert >100m (UC-02)
-│           └── SettingsScreen.js     # Pengaturan parameter & unpair
+├── mobile/                        # [DEPRECATED / ARSIP] Prototype React Native / Expo
+│                                  # (Disimpan sebagai referensi; klien produksi utama adalah PWA)
 │
-├── simulator/                # Simulator Visual Dua Perangkat (Dual Device)
-│   ├── DualDeviceSimulator.html # UI visual side-by-side Wanita & Pria
-│   └── run-demo.js              # Runner pengujian otomatis end-to-end
+├── simulator/                     # Simulator Desktop Dual-Device
+│   ├── DualDeviceSimulator.html   # Simulasi visual side-by-side Wanita & Pria
+│   └── run-demo.js                # CLI live interactive demo runner
 │
-├── docker-compose.yml        # Docker compose backend
+├── data/                          # Direktori persistensi database SQLite (Docker volume)
+├── docker-compose.yml             # Konfigurasi container Docker production
+├── JALANKAN_APLIKASI.bat          # Launcher 1-klik untuk Windows
+├── .env.example                   # Contoh konfigurasi environment variable
+├── .gitignore
+├── package.json                   # Root package runner
 └── README.md
 ```
 
 ---
 
+## 💻 Kebutuhan Sistem
+
+- **Node.js**: Versi **≥ 22.5.0** (Wajib, karena modul bawaan `node:sqlite` membutuhkan Node.js v22.5.0 atau lebih baru).
+- **NPM**: Versi ≥ 10.0.0.
+- **OS**: Windows, macOS, atau Linux.
+
+---
+
 ## 🚀 Panduan Menjalankan
 
-### 1. Menjalankan Backend & Unit Tests
+### 1. Menjalankan Pengujian Otomatis
 
-Masuk ke folder `backend`:
-```powershell
-cd C:\Users\ASUS\.gemini\antigravity\scratch\aplikasi-tanpilan\backend
+Jalankan seluruh rangkaian pengujian unit, integrasi, keamanan, dan audit DOM:
+```bash
+npm test
+```
+*Atau dari folder `backend`:*
+```bash
+cd backend
 npm test
 ```
 
-Semua 5 rangkaian pengujian mencakup:
-- Formula Geodesic Haversine
-- Enkripsi Password & Token JWT
-- Registrasi Pengguna & Device (Wanita & Pria)
-- UC-01 Pairing Kode Antar Perangkat
-- UC-02 GPS Tracking & Pemicu Alert Jarak > 100m
+Rangkaian pengujian mencakup:
+1. `backend.test.js`: Formula Geodesic Haversine, Bcrypt Hashing, Registrasi & Pairing UC-01, GPS Tracking UC-02.
+2. `features.test.js`: Geofencing Tempat Favorit, Filter Spike GPS & Akurasi, Konsistensi Ringkasan Harian.
+3. `security.test.js`: Token acak server, penolakan pembajakan token antar-user, sanitasi Stored XSS, perbaikan kedaluwarsa pairing, rate limiting 5x/menit, mutual pairing 1:1, ringkasan >100 titik, clamping input, jeda berbagi & penghapusan akun GDPR.
+4. `bug_hunt.test.js`: Verifikasi 100% ID DOM, onclick handler, validasi REST API edge cases, WebSocket stress & malformed JSON.
 
-### 1. Menjalankan Server (1-Klik via Windows Batch)
-Cukup klik ganda berkas:
-👉 `JALANKAN_APLIKASI.bat`
+### 2. Menjalankan Server Lokal
 
-Atau melalui terminal:
-```powershell
-cd C:\Users\ASUS\.gemini\antigravity\scratch\aplikasi-tanpilan\backend
-node src/index.js
+Dari direktori root:
+```bash
+npm start
 ```
-Server aktif di:
-- **Aplikasi Web di HP / Desktop**: `http://localhost:3000/` atau `http://172.22.200.164:3000/`
-- **Simulator Dual-Device**: `http://localhost:3000/simulator/DualDeviceSimulator.html`
-- **REST API**: `http://localhost:3000/api`
-- **WebSocket**: `ws://localhost:3000/ws`
+Atau klik ganda berkas **`JALANKAN_APLIKASI.bat`** (khusus Windows).
+
+Aplikasi aktif di:
+- **Aplikasi Web PWA (HP / Browser)**: [http://localhost:3000/](http://localhost:3000/)
+- **Simulator Dual-Device Desktop**: [http://localhost:3000/simulator/DualDeviceSimulator.html](http://localhost:3000/simulator/DualDeviceSimulator.html)
+- **REST API Endpoint**: [http://localhost:3000/api](http://localhost:3000/api)
+- **WebSocket Server**: `ws://localhost:3000/ws`
+
+### 3. Menjalankan dengan Docker
+
+Database disimpan secara persisten di volume `./data`:
+```bash
+docker compose up --build -d
+```
+Untuk menghentikan container:
+```bash
+docker compose down
+```
+
+### 4. Mengakses dari Jaringan Publik / Internet (Tunneling)
+
+Berkas biner `ngrok.exe` dan `cloudflared.exe` sengaja tidak disertakan di dalam repositori git demi keamanan dan kebersihan repositori (115 MB).
+
+Untuk membuka akses internet bagi HP pasangan:
+1. Unduh ngrok resmi dari [ngrok.com/download](https://ngrok.com/download) dan pastikan perintah `ngrok` terdaftar di PATH sistem.
+2. Atur environment variable `NGROK_DOMAIN` di file `.env` jika memiliki domain statis gratis:
+   ```env
+   NGROK_DOMAIN=domain-anda.ngrok-free.app
+   ```
+3. Jalankan `JALANKAN_APLIKASI.bat` atau jalankan manual di terminal:
+   ```bash
+   ngrok http 3000
+   ```
 
 ---
 
-### 2. Menjalankan Simulator Visual Dual-Device
+## ⚙️ Variabel Lingkungan (Environment Variables)
 
-Untuk memverifikasi interaksi dua perangkat (Wanita & Pria) secara langsung:
-1. Pastikan backend sedang berjalan.
-2. Buka browser ke alamat:  
-   👉 **http://localhost:3000/simulator/DualDeviceSimulator.html**
-3. Anda dapat menguji:
-   - Tombol **"Auto-Pair Devices (UC-01)"** untuk menghubungkan perangkat Wanita dan Pria.
-   - Tombol **"Pria Dekat Wanita"** untuk memvalidasi status dalam batas aman (< 100m).
-   - Tombol **"Pria Menjauh (>100m)"** untuk memvalidasi pemicu push notification keluar batas aman.
-   - Tombol **"Mulai Kirim GPS Otomatis (10s)"** untuk mensimulasikan pergerakan periodik setiap 10 detik.
-   - Geser langsung marker pin Pria di peta Leaflet secara bebas.
+Salin berkas `.env.example` menjadi `.env` di root atau folder `backend`:
 
-Jalankan juga automated CLI verification:
-```powershell
-node C:\Users\ASUS\.gemini\antigravity\scratch\aplikasi-tanpilan\simulator\run-demo.js
-```
-
----
-
-### 3. Menjalankan Aplikasi Mobile Native
-
-Aplikasi mobile dibuat dengan konfigurasi Expo / React Native lengkap dengan background location service:
-```powershell
-cd C:\Users\ASUS\.gemini\antigravity\scratch\aplikasi-tanpilan\mobile
-npm install
-npm run android   # Untuk Android APK / Emulator
-# atau
-npm run ios       # Untuk iOS Simulator
-# atau
-npm start         # Expo QR Code untuk testing di HP fisik via Expo Go
-```
-
----
-
-## 📊 Matriks Verifikasi Kebutuhan PRD
-
-| Kebutuhan PRD | Target Spesifikasi | Status Implementasi | Hasil Verifikasi |
+| Variabel | Tipe | Nilai Default | Keterangan |
 |---|---|---|---|
-| **UC-01 Pendaftaran Device** | Validasi QR/Kode 6-digit & asosiasi device | ✅ **Selesai** | Lulus di `backend.test.js` & `run-demo.js` |
-| **UC-02 Pengiriman GPS** | Interval 10 detik via HTTPS/WS | ✅ **Selesai** | Diterapkan di `locationService.js` (interval 10s) |
-| **Push Notification Jarak** | Push muncul jika jarak > 100m | ✅ **Selesai** | Haversine checker otomatis memicu alert realtime |
-| **Performa Latensi** | Update muncul < 5 detik | ✅ **Selesai** | Latensi WebSocket tercatat < 50 ms |
-| **Keamanan** | TLS & Enkripsi/Hashing | ✅ **Selesai** | Bcrypt hash, JWT token, parameterized SQLite |
-| **Retensi Data** | Minimal 30 hari | ✅ **Selesai** | Fungsi auto-cleanup `cleanupOldData(30)` |
+| `PORT` | Number | `3000` | Port listen server HTTP & WebSocket |
+| `HOST` | String | `0.0.0.0` | Bind host interface |
+| `NODE_ENV` | String | `development` | Mode aplikasi (`production` / `development`) |
+| `JWT_SECRET` | String | *Auto-generated di dev* | Kunci enkripsi token JWT (Wajib diisi di production) |
+| `DATABASE_PATH` | String | `./data/tanpilan.db` | Path berkas database SQLite |
+| `TIMEZONE_OFFSET_HOURS` | Number | `7` | Selisih jam zona waktu (7 untuk WIB, 8 untuk WITA, 9 untuk WIT) |
+| `GPS_INTERVAL_SECONDS` | Number | `10` | Interval pengiriman koordinat GPS background |
+| `DISTANCE_ALERT_THRESHOLD_METERS` | Number | `100` | Jarak pemicu peringatan jarak antar-perangkat |
+| `MAX_HISTORY_DAYS` | Number | `30` | Kebijakan retensi data lokasi sebelum dibersihkan otomatis |
+| `GPS_MAX_ACCURACY_THRESHOLD_METERS`| Number | `50` | Titik GPS dengan radius akurasi > 50m diabaikan dari ringkasan |
+| `GPS_MAX_SPEED_THRESHOLD_MPS` | Number | `40` | Kecepatan maksimal terimplikasi (40 m/s = 144 km/jam) |
+
+---
+
+## 🔒 Catatan Keamanan & Hak Privasi
+
+Aplikasi pelacak lokasi memiliki risiko tinggi terhadap kebocoran informasi sensitif. Proyek ini menerapkan prinsip *Privacy by Design*:
+1. **Consent Dua Arah**: Pengguna selalu mendapatkan notifikasi visual saat lokasinya sedang dilacak oleh pasangan.
+2. **Kendali Penuh**: Pengguna dapat menjeda transmisi koordinat kapan saja dengan satu sentuhan tanpa harus mematikan koneksi data seluler.
+3. **Pemberhentian Akses Seketika**: Melakukan *unpair* seketika mencabut hak akses pasangan terhadap seluruh riwayat posisi masa lalu.
+4. **Data Minimization & Auto-Cleanup**: Titik koordinat yang berumur lebih dari 30 hari otomatis dihapus secara permanen dari server.
+5. **Zero Hardcoded Secrets**: Tidak ada kata sandi atau kunci rahasia yang disimpan statis di kode sumber repositori.

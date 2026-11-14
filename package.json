@@ -1,0 +1,9 @@
+{
+  "name": "aplikasi-tanpilan",
+  "version": "1.0.0",
+  "description": "Aplikasi Pelacak Lokasi Dua Orang Realtime (Tanpilan)",
+  "scripts": {
+    "test": "npm --prefix backend test",
+    "start": "npm --prefix backend start"
+  }
+}

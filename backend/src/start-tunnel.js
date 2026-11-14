@@ -1,4 +1,11 @@
-const localtunnel = require('localtunnel');
+let localtunnel;
+try {
+  localtunnel = require('localtunnel');
+} catch (e) {
+  console.log('Paket localtunnel tidak terpasang. Anda dapat menggunakan ngrok atau cloudflared.');
+  process.exit(0);
+}
+
 const config = require('./config');
 
 async function startTunnel() {

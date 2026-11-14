@@ -57,9 +57,13 @@ async function runTests() {
   const deviceWanita = registerOrGetDevice(userWanita.id, deviceWanitaToken, 'HP Wanita');
   const devicePria = registerOrGetDevice(userPria.id, devicePriaToken, 'HP Pria');
 
-  assert.strictEqual(deviceWanita.device_name, 'HP Wanita');
+  // Test re-registrasi user yang sudah ada (memperbarui perangkat yang sudah ada)
+  const deviceWanitaReget = registerOrGetDevice(userWanita.id, 'HP Wanita Update');
+  assert.strictEqual(deviceWanitaReget.id, deviceWanita.id, 'ID perangkat harus sama saat user sudah terdaftar');
+  assert.strictEqual(deviceWanitaReget.device_name, 'HP Wanita Update', 'Nama perangkat harus terupdate');
+
   assert.strictEqual(devicePria.device_name, 'HP Pria');
-  console.log(`Perangkat Wanita #${deviceWanita.id} dan Pria #${devicePria.id} berhasil terdaftar.`);
+  console.log(`Perangkat Wanita #${deviceWanita.id} dan Pria #${devicePria.id} berhasil terdaftar & diupdate.`);
   console.log('✅ TEST 3 Lulus!\n');
 
   // TEST 4: UC-01 Pairing Device Pasangan
